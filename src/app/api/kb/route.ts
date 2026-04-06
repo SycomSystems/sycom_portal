@@ -41,7 +41,9 @@ export async function GET(req: NextRequest) {
   })
 
   // Derive unique categories from articles
-  const categories = [...new Set(articles.map(a => a.category).filter(Boolean))]
+  const categorySet = new Set<string>()
+  articles.forEach(a => { if (a.category) categorySet.add(a.category) })
+  const categories = Array.from(categorySet)
 
   return NextResponse.json({ articles, categories })
 }
