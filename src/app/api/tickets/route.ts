@@ -10,7 +10,7 @@ const createSchema = z.object({
   description: z.string().min(10),
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
-  department:  z.string().optional(),
+  clientId:    z.string().optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -69,29 +69,39 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const body   = await req.json()
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const userId = (session.user as any).id
-  const { subject, description, priority, category, department } = parsed.data
+  const userId   = (session.user as any).id
+  const role     = (session.user as any).role
+  const isStaff  = role === 'ADMIN' || role === 'AGENT'
+  const { subject, description, priority, category, clientId } = parsed.data
+
+  // If staff passed a clientId, update the creator's client or just store it on the ticket
+  // If client user, their clientId comes from their own profile automatically via creator relation
+  // We store clientId on the ticket itself for easy querying
+  const ticketData: any = {
+    subject,
+    description,
+    priority,
+    category,
+    slaDeadline: getSlaDeadline(priority),
+    creatorId:   userId,
+  }
+
+  // ADMIN/AGENT can override which client this ticket belongs to
+  if (isStaff && clientId) {
+    ticketData.clientId = clientId
+  }
 
   const ticket = await prisma.ticket.create({
-    data: {
-      subject,
-      description,
-      priority,
-      category,
-      department,
-      slaDeadline: getSlaDeadline(priority),
-      creatorId: userId,
-    },
+    data: ticketData,
     include: {
-      creator: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
     },
   })
 
-  // Send email in background - do NOT await, return response immediately
   if (ticket.creator?.email) {
     import('@/lib/email').then(({ sendTicketCreated }) => {
       sendTicketCreated(ticket.creator!.email!, {
