@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendEmail } from '@/lib/email'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import nodemailer from 'nodemailer'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -17,18 +17,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await prisma.user.findUnique({ where: { id: params.id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  // Generate a new random password
   const newPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12)
   const hashed = await bcrypt.hash(newPassword, 12)
 
-  // Save the new password
   await prisma.user.update({
     where: { id: params.id },
     data: { password: hashed },
   })
 
-  // Send email
-  await sendEmail({
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  })
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: user.email,
     subject: 'Sycom Portal – Nové heslo',
     html: `
