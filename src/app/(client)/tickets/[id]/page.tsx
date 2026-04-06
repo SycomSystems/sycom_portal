@@ -7,7 +7,7 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { formatDateTime, priorityLabels, statusLabels, categoryLabels, isSlaBreached, isSlaWarning } from '@/lib/utils'
-import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2 } from 'lucide-react'
+import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']
@@ -27,6 +27,11 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED:      'bg-gray-100 text-gray-500',
 }
 
+function formatHours(h: number) {
+  if (!h) return null
+  return h % 1 === 0 ? `${h} hod` : `${h.toFixed(2)} hod`
+}
+
 export default function TicketDetailPage() {
   const { id }             = useParams()
   const router             = useRouter()
@@ -34,20 +39,19 @@ export default function TicketDetailPage() {
   const role               = (session?.user as any)?.role
   const queryClient        = useQueryClient()
 
-  const [comment,    setComment]    = useState('')
-  const [isInternal, setIsInternal] = useState(false)
-  const [assigneeId, setAssigneeId] = useState('')
-  const [newStatus,  setNewStatus]  = useState('')
+  const [comment,     setComment]     = useState('')
+  const [isInternal,  setIsInternal]  = useState(false)
+  const [workedHours, setWorkedHours] = useState('')
+  const [assigneeId,  setAssigneeId]  = useState('')
+  const [newStatus,   setNewStatus]   = useState('')
 
-  // Fetch ticket
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
     queryFn:  () => fetch(`/api/tickets/${id}`).then(r => r.json()),
     enabled:  !!id,
-    refetchInterval: 10000, // auto-refresh every 10s
+    refetchInterval: 10000,
   })
 
-  // Fetch agents AND admins for the assignee dropdown
   const { data: agentList } = useQuery({
     queryKey: ['agents'],
     queryFn:  () => fetch('/api/users').then(r => r.json()).then((users: any[]) =>
@@ -61,18 +65,16 @@ export default function TicketDetailPage() {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(data),
-    }).then(r => {
-      if (!r.ok) throw new Error('Chyba')
-      return r.json()
-    }),
+    }).then(r => { if (!r.ok) throw new Error('Chyba'); return r.json() }),
     onSuccess: () => {
-      // Invalidate and immediately refetch so comments appear
       queryClient.invalidateQueries({ queryKey: ['ticket', id] })
       queryClient.refetchQueries({ queryKey: ['ticket', id] })
       toast.success('Tiket aktualizovaný')
       setComment('')
+      setWorkedHours('')
       setNewStatus('')
       setAssigneeId('')
+      setIsInternal(false)
     },
     onError: () => toast.error('Chyba pri aktualizácii'),
   })
@@ -83,6 +85,8 @@ export default function TicketDetailPage() {
     if (isInternal)     payload.isInternal = true
     if (assigneeId)     payload.assigneeId = assigneeId
     if (newStatus)      payload.status     = newStatus
+    const hrs = parseFloat(workedHours)
+    if (!isNaN(hrs) && hrs > 0) payload.workedHours = hrs
     if (Object.keys(payload).length === 0) return
     mutation.mutate(payload)
   }
@@ -102,15 +106,15 @@ export default function TicketDetailPage() {
     </PortalLayout>
   )
 
-  const isStaff = role === 'ADMIN' || role === 'AGENT'
+  const isStaff     = role === 'ADMIN' || role === 'AGENT'
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
+  const totalHours  = ticket.totalWorkedHours ?? 0
 
   return (
     <PortalLayout>
       <div className="max-w-4xl mx-auto py-8 px-6">
 
-        {/* Back */}
         <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-sycom-500 mb-5 transition-colors">
           <ArrowLeft size={15} /> Späť na tikety
         </button>
@@ -119,10 +123,15 @@ export default function TicketDetailPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="font-mono text-xs font-bold text-sycom-500">#T-{ticket.ticketNumber}</span>
                 {slaBreached && <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><AlertTriangle size={11} /> SLA porušená</span>}
                 {!slaBreached && slaWarn && <span className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full"><Clock size={11} /> SLA blíži</span>}
+                {isStaff && totalHours > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-bold text-sycom-600 bg-sycom-50 px-2 py-0.5 rounded-full">
+                    <Timer size={11} /> {formatHours(totalHours)} celkom
+                  </span>
+                )}
               </div>
               <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
               {ticket.creator?.client && (
@@ -134,17 +143,16 @@ export default function TicketDetailPage() {
             </span>
           </div>
 
-          {/* Meta grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             {[
-              { label: 'Priorita',   value: <span className={`font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority]}`}>{priorityLabels[ticket.priority] ?? ticket.priority}</span> },
-              { label: 'Kategória',  value: categoryLabels[ticket.category] ?? ticket.category },
-              { label: 'Vytvoril',   value: <span className="flex items-center gap-1"><User size={11} /> {ticket.creator?.name}</span> },
-              { label: 'Priradený',  value: ticket.assignee ? <span className="flex items-center gap-1"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradený</span> },
-              { label: 'Tím',        value: ticket.team?.name ?? <span className="text-gray-300">—</span> },
-              { label: 'SLA',        value: ticket.slaDeadline ? `do ${new Date(ticket.slaDeadline).toLocaleDateString('sk')}` : '—' },
-              { label: 'Vytvorené',  value: formatDateTime(ticket.createdAt) },
-              { label: 'Aktualizované', value: formatDateTime(ticket.updatedAt) },
+              { label: 'Priorita',  value: <span className={`font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority]}`}>{priorityLabels[ticket.priority] ?? ticket.priority}</span> },
+              { label: 'Kategória', value: categoryLabels[ticket.category] ?? ticket.category },
+              { label: 'Vytvoril',  value: <span className="flex items-center gap-1"><User size={11} /> {ticket.creator?.name}</span> },
+              { label: 'Priradený', value: ticket.assignee ? <span className="flex items-center gap-1"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradený</span> },
+              { label: 'Tím',       value: ticket.team?.name ?? <span className="text-gray-300">—</span> },
+              { label: 'SLA',       value: ticket.slaDeadline ? `do ${new Date(ticket.slaDeadline).toLocaleDateString('sk')}` : '—' },
+              { label: 'Vytvorené', value: formatDateTime(ticket.createdAt) },
+              ...(isStaff ? [{ label: 'Odpracované hodiny', value: <span className="flex items-center gap-1 font-bold text-sycom-600"><Timer size={11} /> {formatHours(totalHours) ?? '0 hod'}</span> }] : []),
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-xl p-3">
                 <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">{label}</p>
@@ -153,7 +161,6 @@ export default function TicketDetailPage() {
             ))}
           </div>
 
-          {/* Description */}
           <div className="mt-4 p-4 bg-gray-50 rounded-xl">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Popis</p>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.description}</p>
@@ -168,7 +175,7 @@ export default function TicketDetailPage() {
 
             {(ticket.comments ?? []).length === 0 && (
               <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-sm text-gray-400">
-                Zatiaľ žiadne správy. Napíšte prvú správu.
+                Zatiaľ žiadne správy.
               </div>
             )}
 
@@ -184,11 +191,18 @@ export default function TicketDetailPage() {
                       <p className="text-[10px] text-gray-400">{formatDateTime(c.createdAt)}</p>
                     </div>
                   </div>
-                  {c.isInternal && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                      <Lock size={9} /> Interná
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isStaff && c.workedHours > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-sycom-600 bg-sycom-50 px-2 py-0.5 rounded-full">
+                        <Timer size={9} /> {formatHours(c.workedHours)}
+                      </span>
+                    )}
+                    {c.isInternal && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                        <Lock size={9} /> Interná
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
               </div>
@@ -204,17 +218,32 @@ export default function TicketDetailPage() {
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100"
               />
-              <div className="flex items-center justify-between mt-3">
-                {isStaff && (
-                  <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+              {isStaff && (
+                <div className="mt-3 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Timer size={13} className="text-gray-400 shrink-0" />
+                    <input
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.25"
+                      value={workedHours}
+                      onChange={e => setWorkedHours(e.target.value)}
+                      placeholder="Hodiny práce (napr. 1.5)"
+                      className="w-44 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-sycom-400"
+                    />
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
                     <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded" />
-                    <Lock size={11} /> Interná poznámka
+                    <Lock size={11} /> Interná
                   </label>
-                )}
+                </div>
+              )}
+              <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSubmit}
-                  disabled={mutation.isPending || !comment.trim()}
-                  className="ml-auto flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
+                  disabled={mutation.isPending || (!comment.trim() && !newStatus && !assigneeId)}
+                  className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
                 >
                   <Send size={13} /> {mutation.isPending ? 'Odosielam...' : 'Odoslať'}
                 </button>
@@ -227,56 +256,41 @@ export default function TicketDetailPage() {
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-700">Akcie</h2>
 
-              {/* Change status */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Zmeniť stav</p>
-                <select
-                  value={newStatus}
-                  onChange={e => setNewStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"
-                >
-                  <option value="">— Aktuálny: {statusLabels[ticket.status] ?? ticket.status} —</option>
+                <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                  <option value="">— {statusLabels[ticket.status] ?? ticket.status} —</option>
                   {STATUS_OPTIONS.filter(s => s !== ticket.status).map(s => (
                     <option key={s} value={s}>{statusLabels[s] ?? s}</option>
                   ))}
                 </select>
                 {newStatus && (
-                  <button
-                    onClick={() => mutation.mutate({ status: newStatus })}
-                    disabled={mutation.isPending}
-                    className="mt-2 w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
-                  >
+                  <button onClick={() => mutation.mutate({ status: newStatus })} disabled={mutation.isPending}
+                    className="mt-2 w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
                     Uložiť stav
                   </button>
                 )}
               </div>
 
-              {/* Assign technician - only ADMIN and AGENT */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Priradiť technika</p>
-                <select
-                  value={assigneeId}
-                  onChange={e => setAssigneeId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"
-                >
-                  <option value="">— {ticket.assignee ? ticket.assignee.name : 'Nepriradený'} —</option>
+                <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                  <option value="">— {ticket.assignee?.name ?? 'Nepriradený'} —</option>
                   {(agentList ?? []).map((a: any) => (
                     <option key={a.id} value={a.id}>{a.name} ({a.role === 'ADMIN' ? 'Admin' : 'Agent'})</option>
                   ))}
                 </select>
                 {assigneeId && (
-                  <button
-                    onClick={() => mutation.mutate({ assigneeId })}
-                    disabled={mutation.isPending}
-                    className="mt-2 w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
-                  >
+                  <button onClick={() => mutation.mutate({ assigneeId })} disabled={mutation.isPending}
+                    className="mt-2 w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
                     Priradiť
                   </button>
                 )}
               </div>
             </div>
           )}
-
         </div>
       </div>
     </PortalLayout>
