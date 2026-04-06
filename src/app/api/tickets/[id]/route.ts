@@ -20,10 +20,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const ticket = await prisma.ticket.findUnique({
-    where: { ticketNumber: Number(params.id) },
+    where: { id: params.id },
     include: {
-      creator:  { select: { id: true, name: true, email: true, department: true } },
-      assignee: { select: { id: true, name: true, email: true } },
+      creator:  { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
+      assignee: { select: { id: true, name: true } },
       team:     { select: { id: true, name: true } },
       comments: {
         include: { author: { select: { id: true, name: true, role: true } } },
@@ -35,11 +35,22 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Clients can only view their own tickets
   const role   = (session.user as any).role
   const userId = (session.user as any).id
-  if (role === 'CLIENT' && ticket.creatorId !== userId)
+
+  // CLIENT can only see their own tickets
+  if (role === 'CLIENT' && ticket.creatorId !== userId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // CLIENT_MANAGER can only see tickets from same client
+  if (role === 'CLIENT_MANAGER') {
+    const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
+    const creator = await prisma.user.findUnique({ where: { id: ticket.creatorId }, select: { clientId: true } })
+    if (!me?.clientId || me.clientId !== creator?.clientId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   return NextResponse.json(ticket)
 }
@@ -48,75 +59,55 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = (session.user as any).role
-  if (role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const body   = await req.json()
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { comment, isInternal, ...ticketUpdate } = parsed.data
+  const { status, priority, assigneeId, teamId, comment, isInternal } = parsed.data
   const userId = (session.user as any).id
 
-  const existing = await prisma.ticket.findUnique({
-    where: { ticketNumber: Number(params.id) },
-    include: { creator: true, assignee: true },
-  })
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Set timestamps
-  if (ticketUpdate.status === 'RESOLVED') (ticketUpdate as any).resolvedAt = new Date()
-  if (ticketUpdate.status === 'CLOSED')   (ticketUpdate as any).closedAt   = new Date()
-
-  const ticket = await prisma.ticket.update({
-    where: { ticketNumber: Number(params.id) },
-    data:  ticketUpdate,
-    include: { creator: true, assignee: true },
-  })
+  const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
+  if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // Add comment if provided
-  if (comment?.trim()) {
+  if (comment) {
     const newComment = await prisma.comment.create({
       data: {
-        content:    comment,
+        body:       comment,
         isInternal: isInternal ?? false,
         ticketId:   ticket.id,
         authorId:   userId,
       },
-      include: { author: { select: { name: true } } },
+      include: { author: { select: { id: true, name: true, role: true } } },
     })
-
-    // Notify client of new comment (if not internal)
-    if (!isInternal) {
-      try {
-        await sendNewComment(ticket.creator.email, {
-          ticketNumber: ticket.ticketNumber,
-          subject:      ticket.subject,
-          authorName:   newComment.author.name,
-          comment,
-        })
-      } catch (e) { console.error('Email error:', e) }
-    }
+    try { await sendNewComment(ticket, newComment) } catch {}
   }
 
-  // Email notifications for status/assignee changes
-  try {
-    if (ticketUpdate.assigneeId && ticketUpdate.assigneeId !== existing.assigneeId) {
-      await sendTicketAssigned(ticket.creator.email, {
-        ticketNumber: ticket.ticketNumber,
-        subject:      ticket.subject,
-        agentName:    ticket.assignee?.name ?? 'Technik',
-      })
-    }
-    if (ticketUpdate.status === 'RESOLVED') {
-      await sendTicketResolved(ticket.creator.email, {
-        ticketNumber: ticket.ticketNumber,
-        subject:      ticket.subject,
-      })
-    }
-  } catch (e) { console.error('Email error:', e) }
+  // Update ticket fields
+  const updates: any = {}
+  if (status)               updates.status     = status
+  if (priority)             updates.priority   = priority
+  if (assigneeId !== undefined) updates.assigneeId = assigneeId
+  if (teamId     !== undefined) updates.teamId     = teamId
+  if (status === 'RESOLVED') updates.resolvedAt = new Date()
 
-  return NextResponse.json(ticket)
+  const updated = await prisma.ticket.update({
+    where: { id: params.id },
+    data: updates,
+    include: {
+      creator:  { select: { id: true, name: true, email: true } },
+      assignee: { select: { id: true, name: true } },
+      team:     { select: { id: true, name: true } },
+    },
+  })
+
+  // Send notifications
+  try {
+    if (assigneeId && assigneeId !== ticket.assigneeId) await sendTicketAssigned(updated)
+    if (status === 'RESOLVED' && ticket.status !== 'RESOLVED') await sendTicketResolved(updated)
+  } catch {}
+
+  return NextResponse.json(updated)
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
@@ -124,8 +115,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const role = (session.user as any).role
-  if (role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (role !== 'ADMIN' && role !== 'AGENT') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
-  await prisma.ticket.delete({ where: { ticketNumber: Number(params.id) } })
-  return NextResponse.json({ success: true })
+  await prisma.ticket.delete({ where: { id: params.id } })
+  return NextResponse.json({ ok: true })
 }
