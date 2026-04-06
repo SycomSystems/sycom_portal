@@ -50,7 +50,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
   }
 
-  // Sum total worked hours across all comments (rounded to 2 decimal places)
   const totalWorkedHours = Math.round(
     ticket.comments.reduce((sum, c) => sum + (c.workedHours ?? 0), 0) * 100
   ) / 100
@@ -69,15 +68,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { status, priority, assigneeId, teamId, comment, isInternal, workedHours } = parsed.data
   const userId = (session.user as any).id
   const role   = (session.user as any).role
+  const canLogTime = role === 'ADMIN' || role === 'AGENT'
 
   const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (comment) {
-    const canLogTime = role === 'ADMIN' || role === 'AGENT'
+  // If resolving with workedHours and no comment — create an automatic resolution comment
+  const isResolving = status === 'RESOLVED' && ticket.status !== 'RESOLVED'
+  const commentBody = comment?.trim() || (isResolving && canLogTime && workedHours ? 'Tiket vyriešený' : null)
+
+  if (commentBody) {
     await prisma.comment.create({
       data: {
-        body:        comment,
+        body:        commentBody,
         isInternal:  isInternal ?? false,
         workedHours: canLogTime ? (workedHours ?? 0) : 0,
         ticketId:    ticket.id,
@@ -91,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (priority)                 updates.priority   = priority
   if (assigneeId !== undefined) updates.assigneeId = assigneeId
   if (teamId     !== undefined) updates.teamId     = teamId
-  if (status === 'RESOLVED')    updates.resolvedAt = new Date()
+  if (isResolving)              updates.resolvedAt = new Date()
 
   const updated = await prisma.ticket.update({
     where: { id: params.id },
@@ -111,7 +114,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         agentName:    updated.assignee.name ?? '',
       }).catch(() => {})
     }
-    if (status === 'RESOLVED' && ticket.status !== 'RESOLVED' && updated.creator?.email) {
+    if (isResolving && updated.creator?.email) {
       sendTicketResolved(updated.creator.email, {
         ticketNumber: updated.ticketNumber,
         subject:      updated.subject,
