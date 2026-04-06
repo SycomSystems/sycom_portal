@@ -3,46 +3,52 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendEmail } from '@/lib/email'
+import { z } from 'zod'
 import bcrypt from 'bcryptjs'
-import crypto from 'crypto'
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+const updateSchema = z.object({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
+  role: z.enum(['ADMIN', 'AGENT', 'CLIENT']).optional(),
+  department: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+})
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const role = (session.user as any).role
   if (role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const user = await prisma.user.findUnique({ where: { id: params.id } })
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  const body = await req.json()
+  const parsed = updateSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  // Generate a new random password
-  const newPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12)
-  const hashed = await bcrypt.hash(newPassword, 12)
+  const data: any = { ...parsed.data }
 
-  // Save the new password
-  await prisma.user.update({
+  // Hash password if provided
+  if (data.password) {
+    data.password = await bcrypt.hash(data.password, 12)
+  }
+
+  const user = await prisma.user.update({
     where: { id: params.id },
-    data: { password: hashed },
+    data,
+    select: { id: true, name: true, email: true, role: true, department: true, phone: true, isActive: true },
   })
 
-  // Send email
-  await sendEmail({
-    to: user.email,
-    subject: 'Sycom Portal – Nové heslo',
-    html: `
-      <h2>Vaše nové heslo pre Sycom IT Support Portal</h2>
-      <p>Dobrý deň, <strong>${user.name}</strong>,</p>
-      <p>Administrátor vám vygeneroval nové heslo:</p>
-      <p style="font-size:20px;font-weight:bold;letter-spacing:2px;background:#f4f4f4;padding:12px 20px;border-radius:6px;display:inline-block">${newPassword}</p>
-      <p>Po prihlásení si heslo zmeňte.</p>
-      <p>Portál: <a href="${process.env.NEXTAUTH_URL}">${process.env.NEXTAUTH_URL}</a></p>
-    `,
-  })
-
-  return NextResponse.json({ success: true, email: user.email })
+  return NextResponse.json(user)
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as any).role
+  if (role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   await prisma.user.delete({ where: { id: params.id } })
   return NextResponse.json({ success: true })
