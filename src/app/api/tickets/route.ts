@@ -4,7 +4,6 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { getSlaDeadline } from '@/lib/utils'
-import { sendTicketCreated } from '@/lib/email'
 
 const createSchema = z.object({
   subject:     z.string().min(5).max(200),
@@ -30,19 +29,15 @@ export async function GET(req: NextRequest) {
   const where: any = {}
 
   if (role === 'CLIENT') {
-    // CLIENT sees only their own tickets
     where.creatorId = userId
   } else if (role === 'CLIENT_MANAGER') {
-    // CLIENT_MANAGER sees all tickets from users with the same clientId
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (me?.clientId) {
       where.creator = { clientId: me.clientId }
     } else {
-      // No client assigned — fall back to own tickets only
       where.creatorId = userId
     }
   }
-  // ADMIN and AGENT see all tickets (no filter)
 
   if (status)   where.status   = status.toUpperCase()
   if (priority) where.priority = priority.toUpperCase()
@@ -60,10 +55,7 @@ export async function GET(req: NextRequest) {
         team:     { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
       },
-      orderBy: [
-        { priority: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       skip:  (page - 1) * limit,
       take:  limit,
     }),
@@ -99,7 +91,17 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  try { await sendTicketCreated(ticket) } catch {}
+  try {
+    const { sendTicketCreated } = await import('@/lib/email')
+    if (ticket.creator?.email) {
+      await sendTicketCreated(ticket.creator.email, {
+        ticketNumber: ticket.ticketNumber,
+        subject:      ticket.subject,
+        priority:     ticket.priority,
+        category:     ticket.category,
+      })
+    }
+  } catch {}
 
   return NextResponse.json(ticket, { status: 201 })
 }
