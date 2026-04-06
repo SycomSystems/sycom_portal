@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { sendTicketAssigned, sendTicketResolved, sendNewComment } from '@/lib/email'
+import { sendTicketAssigned, sendTicketResolved } from '@/lib/email'
 
 const updateSchema = z.object({
   status:     z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
@@ -38,14 +38,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const role   = (session.user as any).role
   const userId = (session.user as any).id
 
-  // CLIENT can only see their own tickets
   if (role === 'CLIENT' && ticket.creatorId !== userId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // CLIENT_MANAGER can only see tickets from same client
   if (role === 'CLIENT_MANAGER') {
-    const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
+    const me      = await prisma.user.findUnique({ where: { id: userId },           select: { clientId: true } })
     const creator = await prisma.user.findUnique({ where: { id: ticket.creatorId }, select: { clientId: true } })
     if (!me?.clientId || me.clientId !== creator?.clientId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -69,27 +67,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Add comment if provided
   if (comment) {
-    const newComment = await prisma.comment.create({
+    await prisma.comment.create({
       data: {
         body:       comment,
         isInternal: isInternal ?? false,
         ticketId:   ticket.id,
         authorId:   userId,
       },
-      include: { author: { select: { id: true, name: true, role: true } } },
     })
-    try { await sendNewComment(ticket, newComment) } catch {}
   }
 
-  // Update ticket fields
   const updates: any = {}
-  if (status)               updates.status     = status
-  if (priority)             updates.priority   = priority
+  if (status)                   updates.status     = status
+  if (priority)                 updates.priority   = priority
   if (assigneeId !== undefined) updates.assigneeId = assigneeId
   if (teamId     !== undefined) updates.teamId     = teamId
-  if (status === 'RESOLVED') updates.resolvedAt = new Date()
+  if (status === 'RESOLVED')    updates.resolvedAt = new Date()
 
   const updated = await prisma.ticket.update({
     where: { id: params.id },
@@ -101,7 +95,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
-  // Send notifications
   try {
     if (assigneeId && assigneeId !== ticket.assigneeId) await sendTicketAssigned(updated)
     if (status === 'RESOLVED' && ticket.status !== 'RESOLVED') await sendTicketResolved(updated)
