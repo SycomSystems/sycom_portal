@@ -94,23 +94,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
-  // Email notifications - wrapped in try/catch so errors never crash the API
-  try {
-    const { sendTicketAssigned, sendTicketResolved } = await import('@/lib/email')
+  // Fire-and-forget email notifications — never block the response
+  import('@/lib/email').then(({ sendTicketAssigned, sendTicketResolved }) => {
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
-      await sendTicketAssigned(updated.assignee.email, {
+      sendTicketAssigned(updated.assignee.email, {
         ticketNumber: updated.ticketNumber,
         subject:      updated.subject,
         agentName:    updated.assignee.name ?? '',
-      })
+      }).catch(() => {})
     }
     if (status === 'RESOLVED' && ticket.status !== 'RESOLVED' && updated.creator?.email) {
-      await sendTicketResolved(updated.creator.email, {
+      sendTicketResolved(updated.creator.email, {
         ticketNumber: updated.ticketNumber,
         subject:      updated.subject,
-      })
+      }).catch(() => {})
     }
-  } catch {}
+  }).catch(() => {})
 
   return NextResponse.json(updated)
 }
