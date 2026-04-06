@@ -1,259 +1,297 @@
 'use client'
-// src/app/(admin)/admin/users/page.tsx
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { PortalLayout } from '@/components/layout/PortalLayout'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import toast from 'react-hot-toast'
-import { Search, Plus, X, Loader2, UserCheck, UserX, Shield, Headphones, User } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
-import { cn } from '@/lib/utils'
 
-const schema = z.object({
-  name:       z.string().min(2, 'Min. 2 znaky'),
-  email:      z.string().email('Neplatný email'),
-  password:   z.string().min(8, 'Min. 8 znakov'),
-  role:       z.enum(['ADMIN', 'AGENT', 'CLIENT']),
-  department: z.string().optional(),
-  phone:      z.string().optional(),
-})
-type FormData = z.infer<typeof schema>
+import { useState, useEffect, useCallback } from 'react'
 
-const ROLE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
-  ADMIN:  { label: 'Admin',   icon: <Shield size={11}/>,      color: '#7b3fbe', bg: '#f3eeff' },
-  AGENT:  { label: 'Technik', icon: <Headphones size={11}/>,  color: '#1a6fba', bg: '#e8f2fc' },
-  CLIENT: { label: 'Klient',  icon: <User size={11}/>,        color: '#2a9d5c', bg: '#edf9f3' },
+type User = {
+  id: string
+  name: string
+  email: string
+  role: 'ADMIN' | 'AGENT' | 'CLIENT'
+  department: string | null
+  phone: string | null
+  isActive: boolean
+  createdAt: string
+  _count: { ticketsCreated: number; ticketsAssigned: number }
+}
+
+const emptyForm = {
+  name: '', email: '', password: '', role: 'CLIENT' as User['role'],
+  department: '', phone: '', isActive: true,
 }
 
 export default function UsersPage() {
-  const [search,  setSearch]  = useState('')
-  const [role,    setRole]    = useState('Všetky')
-  const [showModal, setShowModal] = useState(false)
-  const queryClient = useQueryClient()
+  const [users, setUsers] = useState<User[]>([])
+  const [search, setSearch] = useState('')
+  const [filterRole, setFilterRole] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ['users', search, role],
-    queryFn:  () => {
-      const p = new URLSearchParams()
-      if (search)           p.set('search', search)
-      if (role !== 'Všetky') p.set('role', role)
-      return fetch(`/api/users?${p}`).then(r => r.json())
-    },
-  })
+  // Modal state
+  const [modal, setModal] = useState<'none' | 'create' | 'edit'>('none')
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { role: 'CLIENT' },
-  })
+  // Email sending state
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null)
 
-  const createMutation = useMutation({
-    mutationFn: (data: FormData) => fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then(async r => {
-      if (!r.ok) throw new Error((await r.json()).error ?? 'Chyba')
-      return r.json()
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success('Používateľ vytvorený')
-      setShowModal(false)
-      reset()
-    },
-    onError: (e: any) => toast.error(e.message ?? 'Chyba pri vytváraní'),
-  })
+  const fetchUsers = useCallback(async () => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (search) params.set('search', search)
+    if (filterRole) params.set('role', filterRole)
+    const res = await fetch(`/api/users?${params}`)
+    const data = await res.json()
+    setUsers(data)
+    setLoading(false)
+  }, [search, filterRole])
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      fetch(`/api/users/${id}`, {
-        method: 'PATCH',
+  useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  function openCreate() {
+    setForm(emptyForm)
+    setError('')
+    setEditingUser(null)
+    setModal('create')
+  }
+
+  function openEdit(user: User) {
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: '',
+      role: user.role,
+      department: user.department ?? '',
+      phone: user.phone ?? '',
+      isActive: user.isActive,
+    })
+    setError('')
+    setEditingUser(user)
+    setModal('edit')
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const body: any = { ...form }
+      if (modal === 'edit' && !body.password) delete body.password
+
+      const url = modal === 'create' ? '/api/users' : `/api/users/${editingUser!.id}`
+      const method = modal === 'create' ? 'POST' : 'PATCH'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive }),
-      }).then(r => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success('Používateľ aktualizovaný')
-    },
-  })
+        body: JSON.stringify(body),
+      })
 
-  const ROLES = ['Všetky', 'ADMIN', 'AGENT', 'CLIENT']
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error?.fieldErrors ? Object.values(data.error.fieldErrors).flat().join(', ') : data.error || 'Chyba')
+        return
+      }
+
+      setModal('none')
+      fetchUsers()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSendPassword(user: User) {
+    if (!confirm(`Vygenerovať nové heslo a poslať na ${user.email}?`)) return
+    setSendingEmail(user.id)
+    try {
+      const res = await fetch(`/api/users/${user.id}/send-password`, { method: 'POST' })
+      if (res.ok) {
+        alert(`Heslo odoslané na ${user.email}`)
+      } else {
+        alert('Chyba pri odoslaní emailu')
+      }
+    } finally {
+      setSendingEmail(null)
+    }
+  }
+
+  async function handleToggleActive(user: User) {
+    await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: !user.isActive }),
+    })
+    fetchUsers()
+  }
+
+  const roleBadge: Record<string, string> = {
+    ADMIN: 'bg-purple-100 text-purple-700',
+    AGENT: 'bg-blue-100 text-blue-700',
+    CLIENT: 'bg-gray-100 text-gray-700',
+  }
 
   return (
-    <PortalLayout>
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Používatelia</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{users.length} používateľov celkom</p>
-        </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={14} /> Nový používateľ
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Používatelia</h1>
+        <button onClick={openCreate}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+          + Nový používateľ
         </button>
       </div>
 
       {/* Filters */}
-      <div className="card mb-5">
-        <div className="p-4 flex gap-3 items-center flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input className="input pl-9" placeholder="Hľadať podľa mena alebo emailu…"
-              value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="flex gap-2">
-            {ROLES.map(r => (
-              <button key={r}
-                onClick={() => setRole(r)}
-                className={cn(
-                  'text-xs font-semibold px-3 py-1.5 rounded-full border transition-all',
-                  role === r
-                    ? 'bg-sycom-500 text-white border-sycom-500'
-                    : 'bg-white text-gray-500 border-gray-300 hover:border-sycom-400 hover:text-sycom-500'
-                )}>
-                {ROLE_CONFIG[r]?.label ?? r}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex gap-3 mb-4">
+        <input
+          className="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Hľadať podľa mena alebo emailu..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <select
+          className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={filterRole}
+          onChange={e => setFilterRole(e.target.value)}
+        >
+          <option value="">Všetky role</option>
+          <option value="ADMIN">Admin</option>
+          <option value="AGENT">Agent</option>
+          <option value="CLIENT">Klient</option>
+        </select>
       </div>
 
-      {/* Users grid */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <div className="w-8 h-8 border-2 border-sycom-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 gap-4">
-          {users.map((user: any) => {
-            const rc = ROLE_CONFIG[user.role]
-            const initials = user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
-            return (
-              <div key={user.id} className={cn(
-                'card p-5 transition-all',
-                !user.isActive && 'opacity-60'
-              )}>
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-11 h-11 rounded-full bg-sycom-500 text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
-                    {initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 truncate">{user.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                    {user.department && (
-                      <p className="text-[11px] text-gray-400 mt-0.5">{user.department}</p>
-                    )}
-                  </div>
-                  <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md flex-shrink-0"
-                    style={{ background: rc?.bg, color: rc?.color }}>
-                    {rc?.icon} {rc?.label}
+      {/* Table */}
+      <div className="bg-white rounded-xl border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Meno</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Email</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Rola</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Oddelenie</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Stav</th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">Tikety</th>
+              <th className="px-4 py-3 text-right font-medium text-gray-600">Akcie</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loading ? (
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">Načítavanie...</td></tr>
+            ) : users.length === 0 ? (
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">Žiadni používatelia</td></tr>
+            ) : users.map(user => (
+              <tr key={user.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium text-gray-900">{user.name}</td>
+                <td className="px-4 py-3 text-gray-600">{user.email}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleBadge[user.role]}`}>
+                    {user.role}
                   </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mb-4 text-center">
-                  <div className="bg-gray-50 rounded-lg py-2">
-                    <p className="text-lg font-bold text-sycom-500">{user._count?.ticketsCreated ?? 0}</p>
-                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Tikety</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg py-2">
-                    <p className="text-lg font-bold text-sycom-500">{user._count?.ticketsAssigned ?? 0}</p>
-                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Pridelené</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-gray-400">
-                    Od {formatDate(user.createdAt)}
-                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-500">{user.department ?? '—'}</td>
+                <td className="px-4 py-3">
                   <button
-                    onClick={() => toggleMutation.mutate({ id: user.id, isActive: !user.isActive })}
-                    className={cn(
-                      'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all',
-                      user.isActive
-                        ? 'border-red-200 text-red-500 hover:bg-red-50'
-                        : 'border-green-200 text-green-600 hover:bg-green-50'
-                    )}>
-                    {user.isActive
-                      ? <><UserX size={12}/> Deaktivovať</>
-                      : <><UserCheck size={12}/> Aktivovať</>
-                    }
+                    onClick={() => handleToggleActive(user)}
+                    className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}
+                  >
+                    {user.isActive ? 'Aktívny' : 'Neaktívny'}
                   </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+                </td>
+                <td className="px-4 py-3 text-gray-500">
+                  {user._count.ticketsCreated} / {user._count.ticketsAssigned}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => openEdit(user)}
+                      className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 font-medium"
+                    >
+                      Upraviť
+                    </button>
+                    <button
+                      onClick={() => handleSendPassword(user)}
+                      disabled={sendingEmail === user.id}
+                      className="px-3 py-1 text-xs bg-orange-50 text-orange-600 rounded hover:bg-orange-100 font-medium disabled:opacity-50"
+                    >
+                      {sendingEmail === user.id ? '...' : '📧 Heslo'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Create user modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="bg-sycom-500 px-6 py-5 flex items-center justify-between">
+      {/* Modal */}
+      {modal !== 'none' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">
+              {modal === 'create' ? 'Nový používateľ' : `Upraviť: ${editingUser?.name}`}
+            </h2>
+
+            {error && <p className="text-red-600 text-sm mb-3 bg-red-50 p-2 rounded">{error}</p>}
+
+            <div className="space-y-3">
               <div>
-                <p className="text-base font-bold text-white">Nový používateľ</p>
-                <p className="text-xs text-white/70">Vyplňte údaje nového používateľa portálu</p>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Meno *</label>
+                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
-              <button onClick={() => setShowModal(false)}
-                className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors">
-                <X size={15} />
-              </button>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
+                <input type="email" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {modal === 'create' ? 'Heslo *' : 'Nové heslo (nechajte prázdne pre nezmenenie)'}
+                </label>
+                <input type="password" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder={modal === 'edit' ? 'Ponechať heslo...' : ''} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Rola *</label>
+                <select className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as User['role'] }))}>
+                  <option value="CLIENT">Client</option>
+                  <option value="AGENT">Agent</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Oddelenie</label>
+                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Telefón</label>
+                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+              {modal === 'edit' && (
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="isActive" checked={form.isActive}
+                    onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
+                  <label htmlFor="isActive" className="text-sm text-gray-700">Aktívny účet</label>
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleSubmit(d => createMutation.mutate(d))} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Celé meno *</label>
-                  <input {...register('name')} className="input" placeholder="Ján Novák" />
-                  {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
-                </div>
-                <div>
-                  <label className="label">Email *</label>
-                  <input {...register('email')} type="email" className="input" placeholder="jan@firma.sk" />
-                  {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Heslo *</label>
-                <input {...register('password')} type="password" className="input" placeholder="Min. 8 znakov" />
-                {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Rola *</label>
-                  <select {...register('role')} className="input">
-                    <option value="CLIENT">Klient</option>
-                    <option value="AGENT">Technik</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Oddelenie</label>
-                  <input {...register('department')} className="input" placeholder="IT, Predaj…" />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Telefón</label>
-                <input {...register('phone')} className="input" placeholder="0900 000 000" />
-              </div>
-
-              <div className="flex gap-3 pt-2 border-t border-gray-100">
-                <button type="button" onClick={() => { setShowModal(false); reset() }}
-                  className="btn btn-ghost flex-1 justify-center">Zrušiť</button>
-                <button type="submit" disabled={createMutation.isPending}
-                  className="btn btn-primary flex-1 justify-center">
-                  {createMutation.isPending ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
-                  {createMutation.isPending ? 'Vytváram...' : 'Vytvoriť'}
-                </button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setModal('none')}
+                className="px-4 py-2 text-sm rounded-lg border hover:bg-gray-50">
+                Zrušiť
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                {saving ? 'Ukladám...' : modal === 'create' ? 'Vytvoriť' : 'Uložiť'}
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </PortalLayout>
+    </div>
   )
 }
