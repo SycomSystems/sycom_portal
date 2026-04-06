@@ -5,6 +5,9 @@ import path from 'path'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
+// Force Node.js runtime (required for fs/path usage)
+export const runtime = 'nodejs'
+
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads')
 const LOGO_META = path.join(process.cwd(), 'public', 'uploads', 'logo-meta.json')
 
