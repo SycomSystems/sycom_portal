@@ -124,12 +124,13 @@ export default function TicketDetailPage() {
     </PortalLayout>
   )
 
-  const isStaff    = role === 'ADMIN' || role === 'AGENT'
-  const isAdmin    = role === 'ADMIN'
+  const isStaff     = role === 'ADMIN' || role === 'AGENT'
+  const isAdmin     = role === 'ADMIN'
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours  = ticket.totalWorkedHours ?? 0
   const isResolved  = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
+  const clientName  = ticket.creator?.client?.name
 
   return (
     <PortalLayout>
@@ -154,8 +155,8 @@ export default function TicketDetailPage() {
                 )}
               </div>
               <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
-              {ticket.creator?.client && (
-                <p className="flex items-center gap-1 text-xs text-gray-400 mt-1"><Building2 size={12} /> {ticket.creator.client.name}</p>
+              {clientName && (
+                <p className="flex items-center gap-1 text-xs text-gray-400 mt-1"><Building2 size={12} /> {clientName}</p>
               )}
             </div>
             <span className={`text-xs font-bold px-3 py-1 rounded-full ${STATUS_COLORS[ticket.status] ?? 'bg-gray-100 text-gray-500'}`}>
@@ -163,15 +164,16 @@ export default function TicketDetailPage() {
             </span>
           </div>
 
+          {/* Meta grid — department replaced with client name */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             {[
-              { label: 'Priorita',  value: <span className={`font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority]}`}>{priorityLabels[ticket.priority] ?? ticket.priority}</span> },
-              { label: 'Kategória', value: categoryLabels[ticket.category] ?? ticket.category },
-              { label: 'Vytvoril',  value: <span className="flex items-center gap-1"><User size={11} /> {ticket.creator?.name}</span> },
-              { label: 'Priradený', value: ticket.assignee ? <span className="flex items-center gap-1"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradený</span> },
-              { label: 'Tím',       value: ticket.team?.name ?? <span className="text-gray-300">—</span> },
-              { label: 'SLA',       value: ticket.slaDeadline ? `do ${new Date(ticket.slaDeadline).toLocaleDateString('sk')}` : '—' },
-              { label: 'Vytvorené', value: formatDateTime(ticket.createdAt) },
+              { label: 'Priorita',   value: <span className={`font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority]}`}>{priorityLabels[ticket.priority] ?? ticket.priority}</span> },
+              { label: 'Kategória',  value: categoryLabels[ticket.category] ?? ticket.category },
+              { label: 'Vytvoril',   value: <span className="flex items-center gap-1"><User size={11} /> {ticket.creator?.name}</span> },
+              { label: 'Klient',     value: clientName ? <span className="flex items-center gap-1"><Building2 size={11} /> {clientName}</span> : <span className="text-gray-300">—</span> },
+              { label: 'Priradený',  value: ticket.assignee ? <span className="flex items-center gap-1"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradený</span> },
+              { label: 'SLA',        value: ticket.slaDeadline ? `do ${new Date(ticket.slaDeadline).toLocaleDateString('sk')}` : '—' },
+              { label: 'Vytvorené',  value: formatDateTime(ticket.createdAt) },
               ...(isStaff ? [{ label: 'Odpracované hodiny', value: <span className="flex items-center gap-1 font-bold text-sycom-600"><Timer size={11} /> {formatHours(totalHours) ?? '0 hod'}</span> }] : []),
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-xl p-3">
@@ -194,9 +196,7 @@ export default function TicketDetailPage() {
             <h2 className="text-sm font-bold text-gray-700">Konverzácia ({(ticket.comments ?? []).length})</h2>
 
             {(ticket.comments ?? []).length === 0 && (
-              <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-sm text-gray-400">
-                Zatiaľ žiadne správy.
-              </div>
+              <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-sm text-gray-400">Zatiaľ žiadne správy.</div>
             )}
 
             {(ticket.comments ?? []).map((c: any) => (
@@ -222,7 +222,6 @@ export default function TicketDetailPage() {
                         <Lock size={9} /> Interná
                       </span>
                     )}
-                    {/* ADMIN only: delete button shown on comments with worked hours */}
                     {isAdmin && c.workedHours > 0 && (
                       <button
                         onClick={() => handleDeleteComment(c.id)}
@@ -242,13 +241,8 @@ export default function TicketDetailPage() {
             {/* Add comment */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4">
               <p className="text-xs font-bold text-gray-500 mb-2">Pridať správu</p>
-              <textarea
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                placeholder="Napíšte správu..."
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100"
-              />
+              <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Napíšte správu..." rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
               {isStaff && (
                 <label className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
                   <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded" />
@@ -256,11 +250,8 @@ export default function TicketDetailPage() {
                 </label>
               )}
               <div className="flex justify-end mt-3">
-                <button
-                  onClick={handleComment}
-                  disabled={mutation.isPending || !comment.trim()}
-                  className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
-                >
+                <button onClick={handleComment} disabled={mutation.isPending || !comment.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
                   <Send size={13} /> {mutation.isPending ? 'Odosielam...' : 'Odoslať'}
                 </button>
               </div>
@@ -272,51 +263,37 @@ export default function TicketDetailPage() {
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-700">Akcie</h2>
 
-              {/* Log hours */}
               <div className="bg-sycom-50 border border-sycom-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-sycom-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <Timer size={13} /> Zaevidovať hodiny
                 </p>
                 <p className="text-[11px] text-sycom-600 mb-3">Môžete pridávať hodiny opakovane.</p>
-                <input
-                  type="number" min="0.25" max="24" step="0.25"
-                  value={logHours}
+                <input type="number" min="0.25" max="24" step="0.25" value={logHours}
                   onChange={e => { setLogHours(e.target.value); setLogHoursErr(false) }}
                   placeholder="napr. 1.5"
-                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:outline-none mb-2 ${logHoursErr ? 'border-red-400 bg-red-50' : 'border-sycom-200 focus:border-sycom-400'}`}
-                />
+                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:outline-none mb-2 ${logHoursErr ? 'border-red-400 bg-red-50' : 'border-sycom-200 focus:border-sycom-400'}`} />
                 {logHoursErr && <p className="text-xs text-red-500 mb-2">Zadajte platné hodiny</p>}
-                <button
-                  onClick={handleLogHours}
-                  disabled={mutation.isPending || !logHours}
-                  className="w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
+                <button onClick={handleLogHours} disabled={mutation.isPending || !logHours}
+                  className="w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                   <Timer size={13} /> Pridať hodiny
                 </button>
                 {totalHours > 0 && (
-                  <p className="text-center text-xs font-bold text-sycom-600 mt-2">
-                    Spolu: {formatHours(totalHours)}
-                  </p>
+                  <p className="text-center text-xs font-bold text-sycom-600 mt-2">Spolu: {formatHours(totalHours)}</p>
                 )}
               </div>
 
-              {/* Resolve */}
               {!isResolved && (
                 <div className="bg-white border border-gray-200 rounded-2xl p-4">
                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <CheckCircle size={13} /> Uzatvoriť tiket
                   </p>
-                  <button
-                    onClick={handleResolve}
-                    disabled={mutation.isPending}
-                    className="w-full px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
-                  >
+                  <button onClick={handleResolve} disabled={mutation.isPending}
+                    className="w-full px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
                     ✓ Označiť ako vyriešený
                   </button>
                 </div>
               )}
 
-              {/* Change status */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Zmeniť stav</p>
                 <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
@@ -334,7 +311,6 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
-              {/* Assign */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Priradiť technika</p>
                 <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
