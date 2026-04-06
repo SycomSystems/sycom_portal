@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2 } from 'lucide-react'
 
 interface NavItem {
   href: string
@@ -16,14 +16,15 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-  { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} />, badge: 0 },
-  { href: '/tickets/new', label: 'Nový tiket', icon: <Plus size={16} /> },
-  { href: '/kb', label: 'Znalostná báza', icon: <BookOpen size={16} /> },
-  { href: '/admin/users', label: 'Používatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
-  { href: '/admin/teams', label: 'Tímy', icon: <Users size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
+  { href: '/dashboard',      label: 'Dashboard',       icon: <LayoutDashboard size={16} /> },
+  { href: '/tickets',        label: 'Tikety',          icon: <Ticket size={16} />, badge: 0 },
+  { href: '/tickets/new',    label: 'Nový tiket',      icon: <Plus size={16} /> },
+  { href: '/kb',             label: 'Znalostná báza',  icon: <BookOpen size={16} /> },
+  { href: '/admin/users',    label: 'Používatelia',    icon: <Users size={16} />,    roles: ['ADMIN'] },
+  { href: '/admin/clients',  label: 'Klienti',         icon: <Building2 size={16} />, roles: ['ADMIN'] },
+  { href: '/admin/teams',    label: 'Tímy',            icon: <Users size={16} />,    roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/reports',  label: 'Reporty',         icon: <BarChart2 size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/settings',       label: 'Nastavenia',      icon: <Settings size={16} />, roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {
@@ -45,7 +46,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-[220px] flex-shrink-0 bg-white border-r border-gray-200 fixed top-[62px] bottom-0 left-0 flex flex-col">
-      <nav className="flex flex-col gap-0.5 flex-1 p-2">
+      <nav className="flex flex-col gap-0.5 flex-1 p-2 overflow-y-auto">
         <p className="text-[9px] font-bold tracking-[1.8px] uppercase text-gray-400 px-3 pb-1 pt-2">
           Hlavné menu
         </p>
