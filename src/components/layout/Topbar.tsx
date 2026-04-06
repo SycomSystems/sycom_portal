@@ -3,7 +3,6 @@
 import { useSession, signOut } from 'next-auth/react'
 import { Bell, ChevronDown, LogOut, User, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 
 export function Topbar() {
@@ -20,7 +19,9 @@ export function Topbar() {
   useEffect(() => {
     fetch('/api/settings/logo')
       .then(r => r.json())
-      .then(data => { if (data.filename) setLogoUrl(`/uploads/${data.filename}?t=${Date.now()}`) })
+      .then(data => {
+        if (data.filename) setLogoUrl(`/uploads/${data.filename}?t=${Date.now()}`)
+      })
       .catch(() => {})
   }, [])
 
@@ -29,13 +30,11 @@ export function Topbar() {
       {/* Logo */}
       <div className="flex items-center gap-2.5">
         {logoUrl ? (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={logoUrl}
             alt="Logo"
-            width={140}
-            height={40}
-            className="object-contain max-h-10"
-            unoptimized
+            className="object-contain max-h-10 max-w-[160px]"
           />
         ) : (
           <>
