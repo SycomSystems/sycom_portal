@@ -144,15 +144,17 @@ model Ticket {
 }
 
 model Comment {
-  id        String   @id @default(cuid())
-  body      String   @db.Text
-  isInternal Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ticketId  String
-  authorId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id])
+  id             String   @id @default(cuid())
+  body           String   @db.Text
+  isInternal     Boolean  @default(false)
+  // Time tracking — minutes worked on this comment/action (for monthly billing)
+  workedMinutes  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ticketId       String
+  authorId       String
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author         User     @relation(fields: [authorId], references: [id])
 
   @@map("comments")
 }
