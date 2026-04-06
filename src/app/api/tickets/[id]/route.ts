@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { sendTicketAssigned, sendTicketResolved } from '@/lib/email'
 
 const updateSchema = z.object({
   status:     z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
@@ -64,10 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { status, priority, assigneeId, teamId, comment, isInternal } = parsed.data
   const userId = (session.user as any).id
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: params.id },
-    include: { creator: { select: { email: true } }, assignee: { select: { email: true, name: true } } },
-  })
+  const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (comment) {
@@ -98,7 +94,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
+  // Email notifications - wrapped in try/catch so errors never crash the API
   try {
+    const { sendTicketAssigned, sendTicketResolved } = await import('@/lib/email')
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
       await sendTicketAssigned(updated.assignee.email, {
         ticketNumber: updated.ticketNumber,
