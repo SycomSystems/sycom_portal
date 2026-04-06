@@ -67,7 +67,6 @@ model User {
   clientId      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  // Relations
   client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
   ticketsCreated    Ticket[]        @relation("TicketCreator")
   ticketsAssigned   Ticket[]        @relation("TicketAssignee")
@@ -124,12 +123,10 @@ model Ticket {
   priority     TicketPriority  @default(MEDIUM)
   category     TicketCategory  @default(OTHER)
   department   String?
-  // SLA tracking
   slaDeadline  DateTime?
   resolvedAt   DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
-  // Relations
   creatorId    String
   assigneeId   String?
   teamId       String?
@@ -144,17 +141,17 @@ model Ticket {
 }
 
 model Comment {
-  id             String   @id @default(cuid())
-  body           String   @db.Text
-  isInternal     Boolean  @default(false)
-  // Time tracking — minutes worked on this comment/action (for monthly billing)
-  workedMinutes  Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  ticketId       String
-  authorId       String
-  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author         User     @relation(fields: [authorId], references: [id])
+  id           String   @id @default(cuid())
+  body         String   @db.Text
+  isInternal   Boolean  @default(false)
+  // Time tracking — decimal hours worked (e.g. 1.5 = 1h 30min), used for monthly client billing
+  workedHours  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  ticketId     String
+  authorId     String
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author       User     @relation(fields: [authorId], references: [id])
 
   @@map("comments")
 }
