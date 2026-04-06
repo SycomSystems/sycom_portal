@@ -64,7 +64,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { status, priority, assigneeId, teamId, comment, isInternal } = parsed.data
   const userId = (session.user as any).id
 
-  const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: params.id },
+    include: { creator: { select: { email: true } }, assignee: { select: { email: true, name: true } } },
+  })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (comment) {
@@ -90,14 +93,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data: updates,
     include: {
       creator:  { select: { id: true, name: true, email: true } },
-      assignee: { select: { id: true, name: true } },
+      assignee: { select: { id: true, name: true, email: true } },
       team:     { select: { id: true, name: true } },
     },
   })
 
   try {
-    if (assigneeId && assigneeId !== ticket.assigneeId) await sendTicketAssigned(updated)
-    if (status === 'RESOLVED' && ticket.status !== 'RESOLVED') await sendTicketResolved(updated)
+    if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
+      await sendTicketAssigned(updated.assignee.email, {
+        ticketNumber: updated.ticketNumber,
+        subject:      updated.subject,
+        agentName:    updated.assignee.name ?? '',
+      })
+    }
+    if (status === 'RESOLVED' && ticket.status !== 'RESOLVED' && updated.creator?.email) {
+      await sendTicketResolved(updated.creator.email, {
+        ticketNumber: updated.ticketNumber,
+        subject:      updated.subject,
+      })
+    }
   } catch {}
 
   return NextResponse.json(updated)
