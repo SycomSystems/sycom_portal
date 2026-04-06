@@ -17,12 +17,17 @@ export default withAuth(
     if (pathname.startsWith('/admin/reports') && role === 'CLIENT') {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
+    if (pathname.startsWith('/admin/reports') && role === 'CLIENT_MANAGER') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
 
     return NextResponse.next()
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized({ token }) {
+        return !!token
+      },
     },
   }
 )
@@ -31,8 +36,15 @@ export const config = {
   matcher: [
     '/dashboard/:path*',
     '/tickets/:path*',
-    '/kb/:path*',
     '/admin/:path*',
+    '/kb/:path*',
     '/settings/:path*',
+    '/api/tickets/:path*',
+    '/api/users/:path*',
+    '/api/teams/:path*',
+    '/api/kb/:path*',
+    '/api/reports/:path*',
+    '/api/clients/:path*',
+    '/api/settings/:path*',
   ],
 }
