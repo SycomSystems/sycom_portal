@@ -91,17 +91,17 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  try {
-    const { sendTicketCreated } = await import('@/lib/email')
-    if (ticket.creator?.email) {
-      await sendTicketCreated(ticket.creator.email, {
+  // Send email in background - do NOT await, return response immediately
+  if (ticket.creator?.email) {
+    import('@/lib/email').then(({ sendTicketCreated }) => {
+      sendTicketCreated(ticket.creator!.email!, {
         ticketNumber: ticket.ticketNumber,
         subject:      ticket.subject,
         priority:     ticket.priority,
         category:     ticket.category,
-      })
-    }
-  } catch {}
+      }).catch(() => {})
+    }).catch(() => {})
+  }
 
   return NextResponse.json(ticket, { status: 201 })
 }
