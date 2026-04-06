@@ -39,11 +39,13 @@ export default function TicketDetailPage() {
   const role               = (session?.user as any)?.role
   const queryClient        = useQueryClient()
 
-  const [comment,     setComment]     = useState('')
-  const [isInternal,  setIsInternal]  = useState(false)
-  const [workedHours, setWorkedHours] = useState('')
-  const [assigneeId,  setAssigneeId]  = useState('')
-  const [newStatus,   setNewStatus]   = useState('')
+  const [comment,          setComment]          = useState('')
+  const [isInternal,       setIsInternal]        = useState(false)
+  const [workedHours,      setWorkedHours]       = useState('')
+  const [assigneeId,       setAssigneeId]        = useState('')
+  const [newStatus,        setNewStatus]         = useState('')
+  const [resolveHours,     setResolveHours]      = useState('')
+  const [resolveHoursErr,  setResolveHoursErr]   = useState(false)
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -75,6 +77,8 @@ export default function TicketDetailPage() {
       setNewStatus('')
       setAssigneeId('')
       setIsInternal(false)
+      setResolveHours('')
+      setResolveHoursErr(false)
     },
     onError: () => toast.error('Chyba pri aktualizácii'),
   })
@@ -89,6 +93,17 @@ export default function TicketDetailPage() {
     if (!isNaN(hrs) && hrs > 0) payload.workedHours = hrs
     if (Object.keys(payload).length === 0) return
     mutation.mutate(payload)
+  }
+
+  function handleResolve() {
+    const hrs = parseFloat(resolveHours)
+    if (isNaN(hrs) || hrs <= 0) {
+      setResolveHoursErr(true)
+      toast.error('Zadajte počet odpracovaných hodín pred vyriešením tiketu')
+      return
+    }
+    setResolveHoursErr(false)
+    mutation.mutate({ status: 'RESOLVED', workedHours: hrs })
   }
 
   if (isLoading) return (
@@ -110,6 +125,7 @@ export default function TicketDetailPage() {
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours  = ticket.totalWorkedHours ?? 0
+  const isResolved  = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
 
   return (
     <PortalLayout>
@@ -256,12 +272,46 @@ export default function TicketDetailPage() {
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-700">Akcie</h2>
 
+              {/* Resolve with required hours */}
+              {!isResolved && (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+                  <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Označiť ako vyriešený</p>
+                  <p className="text-[11px] text-green-600 mb-3">Pred vyriešením zadajte počet odpracovaných hodín.</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Timer size={13} className="text-green-600 shrink-0" />
+                    <input
+                      type="number"
+                      min="0.25"
+                      max="24"
+                      step="0.25"
+                      value={resolveHours}
+                      onChange={e => { setResolveHours(e.target.value); setResolveHoursErr(false) }}
+                      placeholder="Počet hodín *"
+                      className={`w-full px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:border-green-400 ${resolveHoursErr ? 'border-red-400 bg-red-50' : 'border-green-200'}`}
+                    />
+                  </div>
+                  {resolveHoursErr && (
+                    <p className="text-xs text-red-600 mb-2 flex items-center gap-1">
+                      <AlertTriangle size={11} /> Hodiny sú povinné
+                    </p>
+                  )}
+                  <button
+                    onClick={handleResolve}
+                    disabled={mutation.isPending}
+                    className="w-full px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    ✓ Vyriešiť tiket
+                  </button>
+                </div>
+              )}
+
+              {/* Other status changes */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Zmeniť stav</p>
                 <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                   <option value="">— {statusLabels[ticket.status] ?? ticket.status} —</option>
-                  {STATUS_OPTIONS.filter(s => s !== ticket.status).map(s => (
+                  {STATUS_OPTIONS.filter(s => s !== ticket.status && s !== 'RESOLVED').map(s => (
                     <option key={s} value={s}>{statusLabels[s] ?? s}</option>
                   ))}
                 </select>
@@ -273,6 +323,7 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
+              {/* Assign */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Priradiť technika</p>
                 <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
