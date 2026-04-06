@@ -7,7 +7,7 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { formatDateTime, priorityLabels, statusLabels, categoryLabels, isSlaBreached, isSlaWarning } from '@/lib/utils'
-import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle } from 'lucide-react'
+import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
@@ -39,17 +39,13 @@ export default function TicketDetailPage() {
   const role              = (session?.user as any)?.role
   const queryClient       = useQueryClient()
 
-  // Comment form
-  const [comment,    setComment]    = useState('')
-  const [isInternal, setIsInternal] = useState(false)
-
-  // Log hours (standalone — no comment required)
+  const [comment,     setComment]     = useState('')
+  const [isInternal,  setIsInternal]  = useState(false)
   const [logHours,    setLogHours]    = useState('')
   const [logHoursErr, setLogHoursErr] = useState(false)
-
-  // Other actions
-  const [assigneeId, setAssigneeId] = useState('')
-  const [newStatus,  setNewStatus]  = useState('')
+  const [assigneeId,  setAssigneeId]  = useState('')
+  const [newStatus,   setNewStatus]   = useState('')
+  const [deletingId,  setDeletingId]  = useState<string | null>(null)
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -68,25 +64,35 @@ export default function TicketDetailPage() {
 
   const mutation = useMutation({
     mutationFn: (data: any) => fetch(`/api/tickets/${id}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(data),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     }).then(r => { if (!r.ok) throw new Error('Chyba'); return r.json() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', id] })
       queryClient.refetchQueries({ queryKey: ['ticket', id] })
       toast.success('Tiket aktualizovaný')
-      setComment('')
-      setIsInternal(false)
-      setNewStatus('')
-      setAssigneeId('')
-      setLogHours('')
-      setLogHoursErr(false)
+      setComment(''); setIsInternal(false); setNewStatus('')
+      setAssigneeId(''); setLogHours(''); setLogHoursErr(false)
     },
     onError: () => toast.error('Chyba pri aktualizácii'),
   })
 
-  // Send comment (hours optional alongside)
+  async function handleDeleteComment(commentId: string) {
+    if (!confirm('Naozaj chcete vymazať tento záznam práce?')) return
+    setDeletingId(commentId)
+    try {
+      const res = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Chyba')
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+      queryClient.refetchQueries({ queryKey: ['ticket', id] })
+      toast.success('Záznam bol vymazaný')
+    } catch {
+      toast.error('Chyba pri mazaní')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   function handleComment() {
     if (!comment.trim()) return
     const payload: any = { comment: comment.trim() }
@@ -94,27 +100,19 @@ export default function TicketDetailPage() {
     mutation.mutate(payload)
   }
 
-  // Log hours only — creates an internal note automatically
   function handleLogHours() {
     const hrs = parseFloat(logHours)
-    if (isNaN(hrs) || hrs <= 0) {
-      setLogHoursErr(true)
-      toast.error('Zadajte platný počet hodín')
-      return
-    }
+    if (isNaN(hrs) || hrs <= 0) { setLogHoursErr(true); toast.error('Zadajte platný počet hodín'); return }
     setLogHoursErr(false)
     mutation.mutate({ comment: `Zaevidovaný čas: ${formatHours(hrs)}`, isInternal: true, workedHours: hrs })
   }
 
-  // Resolve ticket — no hours required here anymore
   function handleResolve() {
     mutation.mutate({ status: 'RESOLVED' })
   }
 
   if (isLoading) return (
-    <PortalLayout>
-      <div className="flex items-center justify-center h-64 text-gray-400">Načítavam tiket...</div>
-    </PortalLayout>
+    <PortalLayout><div className="flex items-center justify-center h-64 text-gray-400">Načítavam tiket...</div></PortalLayout>
   )
 
   if (!ticket || ticket.error) return (
@@ -127,6 +125,7 @@ export default function TicketDetailPage() {
   )
 
   const isStaff    = role === 'ADMIN' || role === 'AGENT'
+  const isAdmin    = role === 'ADMIN'
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours  = ticket.totalWorkedHours ?? 0
@@ -223,6 +222,17 @@ export default function TicketDetailPage() {
                         <Lock size={9} /> Interná
                       </span>
                     )}
+                    {/* ADMIN only: delete button shown on comments with worked hours */}
+                    {isAdmin && c.workedHours > 0 && (
+                      <button
+                        onClick={() => handleDeleteComment(c.id)}
+                        disabled={deletingId === c.id}
+                        title="Vymazať záznam práce (len admin)"
+                        className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
@@ -262,17 +272,14 @@ export default function TicketDetailPage() {
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-700">Akcie</h2>
 
-              {/* ── Log worked hours (standalone, can be done multiple times) ── */}
+              {/* Log hours */}
               <div className="bg-sycom-50 border border-sycom-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-sycom-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <Timer size={13} /> Zaevidovať hodiny
                 </p>
-                <p className="text-[11px] text-sycom-600 mb-3">Môžete pridávať hodiny opakovane. Všetky sa sčítajú.</p>
+                <p className="text-[11px] text-sycom-600 mb-3">Môžete pridávať hodiny opakovane.</p>
                 <input
-                  type="number"
-                  min="0.25"
-                  max="24"
-                  step="0.25"
+                  type="number" min="0.25" max="24" step="0.25"
                   value={logHours}
                   onChange={e => { setLogHours(e.target.value); setLogHoursErr(false) }}
                   placeholder="napr. 1.5"
@@ -293,7 +300,7 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
-              {/* ── Resolve ── */}
+              {/* Resolve */}
               {!isResolved && (
                 <div className="bg-white border border-gray-200 rounded-2xl p-4">
                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -309,7 +316,7 @@ export default function TicketDetailPage() {
                 </div>
               )}
 
-              {/* ── Change status ── */}
+              {/* Change status */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Zmeniť stav</p>
                 <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
@@ -327,7 +334,7 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
-              {/* ── Assign ── */}
+              {/* Assign */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Priradiť technika</p>
                 <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
