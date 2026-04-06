@@ -25,14 +25,11 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState('')
   const [loading, setLoading] = useState(true)
 
-  // Modal state
   const [modal, setModal] = useState<'none' | 'create' | 'edit'>('none')
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  // Email sending state
   const [sendingEmail, setSendingEmail] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
@@ -139,7 +136,6 @@ export default function UsersPage() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 mb-4">
         <input
           className="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -159,7 +155,6 @@ export default function UsersPage() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
@@ -222,7 +217,6 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {/* Modal */}
       {modal !== 'none' && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">

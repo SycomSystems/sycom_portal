@@ -29,7 +29,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const data: any = { ...parsed.data }
 
-  // Hash password if provided
   if (data.password) {
     data.password = await bcrypt.hash(data.password, 12)
   }
