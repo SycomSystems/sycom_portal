@@ -1,173 +1,189 @@
 'use client'
-
+// src/app/(admin)/admin/users/page.tsx
 import { useState, useEffect, useCallback } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
+import { Plus, Pencil, Trash2, CheckCircle, X, Send, ToggleLeft, ToggleRight, Building2 } from 'lucide-react'
 
 type User = {
   id: string
   name: string
   email: string
-  role: 'ADMIN' | 'AGENT' | 'CLIENT'
+  role: 'ADMIN' | 'AGENT' | 'CLIENT' | 'CLIENT_MANAGER'
   department: string | null
   phone: string | null
   isActive: boolean
   createdAt: string
-  _count: { ticketsCreated: number; ticketsAssigned: number }
+  clientId: string | null
+  client: { id: string; name: string } | null
 }
+
+type Client = { id: string; name: string }
 
 const emptyForm = {
   name: '', email: '', password: '', role: 'CLIENT' as User['role'],
-  department: '', phone: '', isActive: true,
+  department: '', phone: '', clientId: '',
+}
+
+const ROLE_LABELS: Record<User['role'], string> = {
+  ADMIN: 'Admin',
+  AGENT: 'Agent',
+  CLIENT: 'Klient',
+  CLIENT_MANAGER: 'Klient manažér',
+}
+
+const ROLE_COLORS: Record<User['role'], string> = {
+  ADMIN: 'bg-red-100 text-red-700',
+  AGENT: 'bg-blue-100 text-blue-700',
+  CLIENT: 'bg-gray-100 text-gray-700',
+  CLIENT_MANAGER: 'bg-purple-100 text-purple-700',
 }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [search, setSearch] = useState('')
-  const [filterRole, setFilterRole] = useState('')
+  const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<'none' | 'create' | 'edit'>('none')
-  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [modal, setModal] = useState<'create' | 'edit' | null>(null)
+  const [editing, setEditing] = useState<User | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [sendingEmail, setSendingEmail] = useState<string | null>(null)
+  const [flash, setFlash] = useState<string | null>(null)
 
-  const fetchUsers = useCallback(async () => {
+  const load = useCallback(() => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (search) params.set('search', search)
-    if (filterRole) params.set('role', filterRole)
-    const res = await fetch(`/api/users?${params}`)
-    const data = await res.json()
-    setUsers(data)
-    setLoading(false)
-  }, [search, filterRole])
+    Promise.all([
+      fetch('/api/users').then(r => r.json()),
+      fetch('/api/clients').then(r => r.json()),
+    ]).then(([u, c]) => {
+      setUsers(u)
+      setClients(c)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
 
-  useEffect(() => { fetchUsers() }, [fetchUsers])
+  useEffect(() => { load() }, [load])
 
-  function openCreate() {
-    setForm(emptyForm); setError(''); setEditingUser(null); setModal('create')
+  const showFlash = (msg: string) => {
+    setFlash(msg)
+    setTimeout(() => setFlash(null), 3500)
   }
 
-  function openEdit(user: User) {
-    setForm({ name: user.name, email: user.email, password: '', role: user.role,
-      department: user.department ?? '', phone: user.phone ?? '', isActive: user.isActive })
-    setError(''); setEditingUser(user); setModal('edit')
+  const openCreate = () => {
+    setForm(emptyForm)
+    setEditing(null)
+    setModal('create')
   }
 
-  async function handleSave() {
-    setSaving(true); setError('')
+  const openEdit = (u: User) => {
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, department: u.department || '', phone: u.phone || '', clientId: u.clientId || '' })
+    setEditing(u)
+    setModal('edit')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
     try {
-      const body: any = { ...form }
-      if (modal === 'edit' && !body.password) delete body.password
-      const url = modal === 'create' ? '/api/users' : `/api/users/${editingUser!.id}`
-      const method = modal === 'create' ? 'POST' : 'PATCH'
+      const url = editing ? `/api/users/${editing.id}` : '/api/users'
+      const method = editing ? 'PATCH' : 'POST'
+      const body: any = { name: form.name, email: form.email, role: form.role, department: form.department || null, phone: form.phone || null, clientId: form.clientId || null }
+      if (!editing || form.password) body.password = form.password
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error?.fieldErrors ? Object.values(data.error.fieldErrors).flat().join(', ') : data.error || 'Chyba')
-        return
-      }
-      setModal('none'); fetchUsers()
-    } finally { setSaving(false) }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Chyba') }
+      setModal(null)
+      load()
+      showFlash(editing ? 'Používateľ bol aktualizovaný.' : 'Používateľ bol vytvorený.')
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function handleSendPassword(user: User) {
-    if (!confirm(`Vygenerovať nové heslo a poslať na ${user.email}?`)) return
-    setSendingEmail(user.id)
-    try {
-      const res = await fetch(`/api/users/${user.id}/send-password`, { method: 'POST' })
-      alert(res.ok ? `Heslo odoslané na ${user.email}` : 'Chyba pri odoslaní emailu')
-    } finally { setSendingEmail(null) }
+  const handleToggleActive = async (u: User) => {
+    await fetch(`/api/users/${u.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !u.isActive }) })
+    load()
   }
 
-  async function handleToggleActive(user: User) {
-    await fetch(`/api/users/${user.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isActive: !user.isActive }),
-    })
-    fetchUsers()
+  const handleSendPassword = async (u: User) => {
+    await fetch(`/api/users/${u.id}/send-password`, { method: 'POST' })
+    showFlash(`Heslo bolo odoslané na ${u.email}`)
   }
 
-  const roleBadge: Record<string, string> = {
-    ADMIN: 'bg-purple-100 text-purple-700',
-    AGENT: 'bg-blue-100 text-blue-700',
-    CLIENT: 'bg-gray-100 text-gray-700',
+  const handleDelete = async (u: User) => {
+    if (!confirm(`Vymazať používateľa ${u.name}?`)) return
+    await fetch(`/api/users/${u.id}`, { method: 'DELETE' })
+    load()
+    showFlash('Používateľ bol vymazaný.')
   }
+
+  const clientRoles: User['role'][] = ['CLIENT', 'CLIENT_MANAGER']
+  const showClientField = clientRoles.includes(form.role)
 
   return (
     <PortalLayout>
-      <div className="p-6">
+      <div className="max-w-5xl mx-auto py-8 px-6">
+        {flash && (
+          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-sm">
+            <CheckCircle size={16} /> {flash}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Používatelia</h1>
-          <button onClick={openCreate}
-            className="px-4 py-2 bg-sycom-600 text-white rounded-lg hover:bg-sycom-700 text-sm font-medium">
-            + Nový používateľ
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Používatelia</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{users.length} používateľov celkom</p>
+          </div>
+          <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 transition-colors">
+            <Plus size={15} /> Nový používateľ
           </button>
         </div>
 
-        <div className="flex gap-3 mb-4">
-          <input
-            className="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-sycom-500"
-            placeholder="Hľadať podľa mena alebo emailu..."
-            value={search} onChange={e => setSearch(e.target.value)}
-          />
-          <select
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-500"
-            value={filterRole} onChange={e => setFilterRole(e.target.value)}
-          >
-            <option value="">Všetky role</option>
-            <option value="ADMIN">Admin</option>
-            <option value="AGENT">Agent</option>
-            <option value="CLIENT">Klient</option>
-          </select>
-        </div>
-
-        <div className="bg-white rounded-xl border overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Meno</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Email</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Rola</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Oddelenie</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Stav</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Tikety</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600">Akcie</th>
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Meno</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Rola</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Stav</th>
+                <th className="px-5 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-400">
-                  <div className="w-6 h-6 border-2 border-sycom-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                </td></tr>
-              ) : users.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-400">Žiadni používatelia</td></tr>
-              ) : users.map(user => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{user.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{user.email}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleBadge[user.role]}`}>{user.role}</span>
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">Načítavam...</td></tr>
+              ) : users.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-5 py-3">
+                    <p className="font-semibold text-gray-900">{u.name}</p>
+                    <p className="text-xs text-gray-400">{u.email}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{user.department ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => handleToggleActive(user)}
-                      className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {user.isActive ? 'Aktívny' : 'Neaktívny'}
+                  <td className="px-5 py-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role]}`}>
+                      {ROLE_LABELS[u.role]}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {u.client ? (
+                      <span className="flex items-center gap-1 text-xs text-gray-600">
+                        <Building2 size={12} className="text-gray-400" /> {u.client.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    <button onClick={() => handleToggleActive(u)} className="flex items-center gap-1.5 text-xs">
+                      {u.isActive
+                        ? <><ToggleRight size={16} className="text-green-500" /><span className="text-green-600 font-medium">Aktívny</span></>
+                        : <><ToggleLeft size={16} className="text-gray-400" /><span className="text-gray-400">Neaktívny</span></>
+                      }
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{user._count.ticketsCreated} / {user._count.ticketsAssigned}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openEdit(user)}
-                        className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 font-medium">
-                        Upraviť
-                      </button>
-                      <button onClick={() => handleSendPassword(user)} disabled={sendingEmail === user.id}
-                        className="px-3 py-1 text-xs bg-orange-50 text-orange-600 rounded hover:bg-orange-100 font-medium disabled:opacity-50">
-                        {sendingEmail === user.id ? '...' : '📧 Heslo'}
-                      </button>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => handleSendPassword(u)} title="Odoslať heslo" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Send size={13} /></button>
+                      <button onClick={() => openEdit(u)} title="Upraviť" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13} /></button>
+                      <button onClick={() => handleDelete(u)} title="Vymazať" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
@@ -175,72 +191,72 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+      </div>
 
-        {modal !== 'none' && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
-                {modal === 'create' ? 'Nový používateľ' : `Upraviť: ${editingUser?.name}`}
-              </h2>
-              {error && <p className="text-red-600 text-sm mb-3 bg-red-50 p-2 rounded">{error}</p>}
-              <div className="space-y-3">
-                {[
-                  { label: 'Meno *', key: 'name', type: 'text' },
-                  { label: 'Email *', key: 'email', type: 'email' },
-                ].map(({ label, key, type }) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                    <input type={type} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-500"
-                      value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
-                ))}
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    {modal === 'create' ? 'Heslo *' : 'Nové heslo (prázdne = nezmeniť)'}
-                  </label>
-                  <input type="password" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-500"
-                    value={form.password} placeholder={modal === 'edit' ? 'Ponechať heslo...' : ''}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+      {/* Modal */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">{modal === 'create' ? 'Nový používateľ' : 'Upraviť používateľa'}</h2>
+              <button onClick={() => setModal(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Celé meno *</label>
+                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="Ján Novák" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Email *</label>
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="jan@firma.sk" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">{modal === 'edit' ? 'Nové heslo (nechajte prázdne pre zachovanie)' : 'Heslo *'}</label>
+                  <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="••••••••" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Rola *</label>
-                  <select className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-500"
-                    value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as User['role'] }))}>
-                    <option value="CLIENT">Client</option>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Rola</label>
+                  <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as User['role'] }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                    <option value="CLIENT">Klient</option>
+                    <option value="CLIENT_MANAGER">Klient manažér</option>
                     <option value="AGENT">Agent</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
-                {[
-                  { label: 'Oddelenie', key: 'department' },
-                  { label: 'Telefón', key: 'phone' },
-                ].map(({ label, key }) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                    <input className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-500"
-                      value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
-                ))}
-                {modal === 'edit' && (
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" id="isActive" checked={form.isActive}
-                      onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
-                    <label htmlFor="isActive" className="text-sm text-gray-700">Aktívny účet</label>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Oddelenie</label>
+                  <input value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="IT, HR..." />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Telefón</label>
+                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="+421 9xx xxx xxx" />
+                </div>
+                {showClientField && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1">
+                      <Building2 size={11} /> Klient
+                    </label>
+                    <select value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                      <option value="">— Bez klienta —</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
-              <div className="flex justify-end gap-2 mt-5">
-                <button onClick={() => setModal('none')}
-                  className="px-4 py-2 text-sm rounded-lg border hover:bg-gray-50">Zrušiť</button>
-                <button onClick={handleSave} disabled={saving}
-                  className="px-4 py-2 text-sm rounded-lg bg-sycom-600 text-white hover:bg-sycom-700 disabled:opacity-50">
-                  {saving ? 'Ukladám...' : modal === 'create' ? 'Vytvoriť' : 'Uložiť'}
-                </button>
-              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Zrušiť</button>
+              <button onClick={handleSave} disabled={saving || !form.name || !form.email}
+                className="px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
+                {saving ? 'Ukladám...' : modal === 'create' ? 'Vytvoriť' : 'Uložiť'}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </PortalLayout>
   )
 }
