@@ -7,10 +7,10 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { formatDateTime, priorityLabels, statusLabels, categoryLabels, isSlaBreached, isSlaWarning } from '@/lib/utils'
-import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer } from 'lucide-react'
+import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']
+const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
 
 const PRIORITY_COLORS: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-700 border-red-200',
@@ -33,19 +33,23 @@ function formatHours(h: number) {
 }
 
 export default function TicketDetailPage() {
-  const { id }             = useParams()
-  const router             = useRouter()
-  const { data: session }  = useSession()
-  const role               = (session?.user as any)?.role
-  const queryClient        = useQueryClient()
+  const { id }            = useParams()
+  const router            = useRouter()
+  const { data: session } = useSession()
+  const role              = (session?.user as any)?.role
+  const queryClient       = useQueryClient()
 
-  const [comment,          setComment]          = useState('')
-  const [isInternal,       setIsInternal]        = useState(false)
-  const [workedHours,      setWorkedHours]       = useState('')
-  const [assigneeId,       setAssigneeId]        = useState('')
-  const [newStatus,        setNewStatus]         = useState('')
-  const [resolveHours,     setResolveHours]      = useState('')
-  const [resolveHoursErr,  setResolveHoursErr]   = useState(false)
+  // Comment form
+  const [comment,    setComment]    = useState('')
+  const [isInternal, setIsInternal] = useState(false)
+
+  // Log hours (standalone — no comment required)
+  const [logHours,    setLogHours]    = useState('')
+  const [logHoursErr, setLogHoursErr] = useState(false)
+
+  // Other actions
+  const [assigneeId, setAssigneeId] = useState('')
+  const [newStatus,  setNewStatus]  = useState('')
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -73,37 +77,38 @@ export default function TicketDetailPage() {
       queryClient.refetchQueries({ queryKey: ['ticket', id] })
       toast.success('Tiket aktualizovaný')
       setComment('')
-      setWorkedHours('')
+      setIsInternal(false)
       setNewStatus('')
       setAssigneeId('')
-      setIsInternal(false)
-      setResolveHours('')
-      setResolveHoursErr(false)
+      setLogHours('')
+      setLogHoursErr(false)
     },
     onError: () => toast.error('Chyba pri aktualizácii'),
   })
 
-  function handleSubmit() {
-    const payload: any = {}
-    if (comment.trim()) payload.comment    = comment.trim()
-    if (isInternal)     payload.isInternal = true
-    if (assigneeId)     payload.assigneeId = assigneeId
-    if (newStatus)      payload.status     = newStatus
-    const hrs = parseFloat(workedHours)
-    if (!isNaN(hrs) && hrs > 0) payload.workedHours = hrs
-    if (Object.keys(payload).length === 0) return
+  // Send comment (hours optional alongside)
+  function handleComment() {
+    if (!comment.trim()) return
+    const payload: any = { comment: comment.trim() }
+    if (isInternal) payload.isInternal = true
     mutation.mutate(payload)
   }
 
-  function handleResolve() {
-    const hrs = parseFloat(resolveHours)
+  // Log hours only — creates an internal note automatically
+  function handleLogHours() {
+    const hrs = parseFloat(logHours)
     if (isNaN(hrs) || hrs <= 0) {
-      setResolveHoursErr(true)
-      toast.error('Zadajte počet odpracovaných hodín pred vyriešením tiketu')
+      setLogHoursErr(true)
+      toast.error('Zadajte platný počet hodín')
       return
     }
-    setResolveHoursErr(false)
-    mutation.mutate({ status: 'RESOLVED', workedHours: hrs })
+    setLogHoursErr(false)
+    mutation.mutate({ comment: `Zaevidovaný čas: ${formatHours(hrs)}`, isInternal: true, workedHours: hrs })
+  }
+
+  // Resolve ticket — no hours required here anymore
+  function handleResolve() {
+    mutation.mutate({ status: 'RESOLVED' })
   }
 
   if (isLoading) return (
@@ -121,7 +126,7 @@ export default function TicketDetailPage() {
     </PortalLayout>
   )
 
-  const isStaff     = role === 'ADMIN' || role === 'AGENT'
+  const isStaff    = role === 'ADMIN' || role === 'AGENT'
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours  = ticket.totalWorkedHours ?? 0
@@ -235,30 +240,15 @@ export default function TicketDetailPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100"
               />
               {isStaff && (
-                <div className="mt-3 flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Timer size={13} className="text-gray-400 shrink-0" />
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      step="0.25"
-                      value={workedHours}
-                      onChange={e => setWorkedHours(e.target.value)}
-                      placeholder="Hodiny práce (napr. 1.5)"
-                      className="w-44 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-sycom-400"
-                    />
-                  </div>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                    <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded" />
-                    <Lock size={11} /> Interná
-                  </label>
-                </div>
+                <label className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                  <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded" />
+                  <Lock size={11} /> Interná poznámka
+                </label>
               )}
               <div className="flex justify-end mt-3">
                 <button
-                  onClick={handleSubmit}
-                  disabled={mutation.isPending || (!comment.trim() && !newStatus && !assigneeId)}
+                  onClick={handleComment}
+                  disabled={mutation.isPending || !comment.trim()}
                   className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
                 >
                   <Send size={13} /> {mutation.isPending ? 'Odosielam...' : 'Odoslať'}
@@ -272,46 +262,60 @@ export default function TicketDetailPage() {
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-gray-700">Akcie</h2>
 
-              {/* Resolve with required hours */}
+              {/* ── Log worked hours (standalone, can be done multiple times) ── */}
+              <div className="bg-sycom-50 border border-sycom-200 rounded-2xl p-4">
+                <p className="text-xs font-bold text-sycom-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Timer size={13} /> Zaevidovať hodiny
+                </p>
+                <p className="text-[11px] text-sycom-600 mb-3">Môžete pridávať hodiny opakovane. Všetky sa sčítajú.</p>
+                <input
+                  type="number"
+                  min="0.25"
+                  max="24"
+                  step="0.25"
+                  value={logHours}
+                  onChange={e => { setLogHours(e.target.value); setLogHoursErr(false) }}
+                  placeholder="napr. 1.5"
+                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:outline-none mb-2 ${logHoursErr ? 'border-red-400 bg-red-50' : 'border-sycom-200 focus:border-sycom-400'}`}
+                />
+                {logHoursErr && <p className="text-xs text-red-500 mb-2">Zadajte platné hodiny</p>}
+                <button
+                  onClick={handleLogHours}
+                  disabled={mutation.isPending || !logHours}
+                  className="w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Timer size={13} /> Pridať hodiny
+                </button>
+                {totalHours > 0 && (
+                  <p className="text-center text-xs font-bold text-sycom-600 mt-2">
+                    Spolu: {formatHours(totalHours)}
+                  </p>
+                )}
+              </div>
+
+              {/* ── Resolve ── */}
               {!isResolved && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-                  <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Označiť ako vyriešený</p>
-                  <p className="text-[11px] text-green-600 mb-3">Pred vyriešením zadajte počet odpracovaných hodín.</p>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Timer size={13} className="text-green-600 shrink-0" />
-                    <input
-                      type="number"
-                      min="0.25"
-                      max="24"
-                      step="0.25"
-                      value={resolveHours}
-                      onChange={e => { setResolveHours(e.target.value); setResolveHoursErr(false) }}
-                      placeholder="Počet hodín *"
-                      className={`w-full px-2 py-1.5 border rounded-lg text-xs focus:outline-none focus:border-green-400 ${resolveHoursErr ? 'border-red-400 bg-red-50' : 'border-green-200'}`}
-                    />
-                  </div>
-                  {resolveHoursErr && (
-                    <p className="text-xs text-red-600 mb-2 flex items-center gap-1">
-                      <AlertTriangle size={11} /> Hodiny sú povinné
-                    </p>
-                  )}
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <CheckCircle size={13} /> Uzatvoriť tiket
+                  </p>
                   <button
                     onClick={handleResolve}
                     disabled={mutation.isPending}
                     className="w-full px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
                   >
-                    ✓ Vyriešiť tiket
+                    ✓ Označiť ako vyriešený
                   </button>
                 </div>
               )}
 
-              {/* Other status changes */}
+              {/* ── Change status ── */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Zmeniť stav</p>
                 <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                   <option value="">— {statusLabels[ticket.status] ?? ticket.status} —</option>
-                  {STATUS_OPTIONS.filter(s => s !== ticket.status && s !== 'RESOLVED').map(s => (
+                  {STATUS_OPTIONS.filter(s => s !== ticket.status).map(s => (
                     <option key={s} value={s}>{statusLabels[s] ?? s}</option>
                   ))}
                 </select>
@@ -323,7 +327,7 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
-              {/* Assign */}
+              {/* ── Assign ── */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Priradiť technika</p>
                 <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
