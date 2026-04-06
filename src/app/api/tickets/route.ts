@@ -1,4 +1,3 @@
-// src/app/api/tickets/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -25,13 +24,25 @@ export async function GET(req: NextRequest) {
   const status   = searchParams.get('status')
   const priority = searchParams.get('priority')
   const search   = searchParams.get('search')
-  const page     = Number(searchParams.get('page') ?? 1)
-  const limit    = Number(searchParams.get('limit') ?? 20)
+  const page     = parseInt(searchParams.get('page') || '1')
+  const limit    = parseInt(searchParams.get('limit') || '20')
 
   const where: any = {}
 
-  // Clients only see their own tickets
-  if (role === 'CLIENT') where.creatorId = userId
+  if (role === 'CLIENT') {
+    // CLIENT sees only their own tickets
+    where.creatorId = userId
+  } else if (role === 'CLIENT_MANAGER') {
+    // CLIENT_MANAGER sees all tickets from users with the same clientId
+    const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
+    if (me?.clientId) {
+      where.creator = { clientId: me.clientId }
+    } else {
+      // No client assigned — fall back to own tickets only
+      where.creatorId = userId
+    }
+  }
+  // ADMIN and AGENT see all tickets (no filter)
 
   if (status)   where.status   = status.toUpperCase()
   if (priority) where.priority = priority.toUpperCase()
@@ -44,7 +55,7 @@ export async function GET(req: NextRequest) {
     prisma.ticket.findMany({
       where,
       include: {
-        creator:  { select: { id: true, name: true, email: true } },
+        creator:  { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
         assignee: { select: { id: true, name: true } },
         team:     { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
@@ -71,43 +82,24 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const userId = (session.user as any).id
-  const data   = parsed.data
+  const { subject, description, priority, category, department } = parsed.data
 
   const ticket = await prisma.ticket.create({
     data: {
-      subject:     data.subject,
-      description: data.description,
-      priority:    data.priority,
-      category:    data.category,
-      department:  data.department,
-      creatorId:   userId,
-      slaDeadline: getSlaDeadline(data.priority),
+      subject,
+      description,
+      priority,
+      category,
+      department,
+      slaDeadline: getSlaDeadline(priority),
+      creatorId: userId,
     },
-    include: { creator: true },
-  })
-
-  // Send confirmation email
-  try {
-    await sendTicketCreated(ticket.creator.email, {
-      ticketNumber: ticket.ticketNumber,
-      subject:      ticket.subject,
-      priority:     ticket.priority,
-      category:     ticket.category,
-    })
-  } catch (e) {
-    console.error('Email send failed:', e)
-  }
-
-  // Create notification
-  await prisma.notification.create({
-    data: {
-      title:    'Tiket vytvorený',
-      message:  `Váš tiket #T-${ticket.ticketNumber} bol prijatý`,
-      type:     'success',
-      userId,
-      ticketId: ticket.id,
+    include: {
+      creator: { select: { id: true, name: true, email: true } },
     },
   })
+
+  try { await sendTicketCreated(ticket) } catch {}
 
   return NextResponse.json(ticket, { status: 201 })
 }
