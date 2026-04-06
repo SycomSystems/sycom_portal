@@ -6,12 +6,13 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const updateSchema = z.object({
-  status:     z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
-  priority:   z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
-  assigneeId: z.string().optional().nullable(),
-  teamId:     z.string().optional().nullable(),
-  comment:    z.string().optional(),
-  isInternal: z.boolean().optional(),
+  status:        z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
+  priority:      z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  assigneeId:    z.string().optional().nullable(),
+  teamId:        z.string().optional().nullable(),
+  comment:       z.string().optional(),
+  isInternal:    z.boolean().optional(),
+  workedMinutes: z.number().int().min(0).optional(),
 })
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -49,7 +50,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
   }
 
-  return NextResponse.json(ticket)
+  // Add total worked minutes across all comments
+  const totalWorkedMinutes = ticket.comments.reduce((sum, c) => sum + (c.workedMinutes ?? 0), 0)
+
+  return NextResponse.json({ ...ticket, totalWorkedMinutes })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -60,19 +64,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { status, priority, assigneeId, teamId, comment, isInternal } = parsed.data
+  const { status, priority, assigneeId, teamId, comment, isInternal, workedMinutes } = parsed.data
   const userId = (session.user as any).id
+  const role   = (session.user as any).role
 
   const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (comment) {
+    // Only ADMIN/AGENT can log workedMinutes
+    const canLogTime = role === 'ADMIN' || role === 'AGENT'
     await prisma.comment.create({
       data: {
-        body:       comment,
-        isInternal: isInternal ?? false,
-        ticketId:   ticket.id,
-        authorId:   userId,
+        body:          comment,
+        isInternal:    isInternal ?? false,
+        workedMinutes: canLogTime ? (workedMinutes ?? 0) : 0,
+        ticketId:      ticket.id,
+        authorId:      userId,
       },
     })
   }
@@ -94,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
-  // Fire-and-forget email notifications — never block the response
+  // Fire-and-forget email notifications
   import('@/lib/email').then(({ sendTicketAssigned, sendTicketResolved }) => {
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
       sendTicketAssigned(updated.assignee.email, {
