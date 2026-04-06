@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+
+# Environment variables - NEVER commit this!
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+/var/log/
+
+# PM2
+ecosystem.config.js.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+prisma/*.db

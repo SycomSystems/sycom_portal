@@ -1,0 +1,225 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────
+enum Role {
+  ADMIN
+  AGENT
+  CLIENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  NETWORK
+  EMAIL
+  SECURITY
+  CLOUD
+  ONBOARDING
+  OTHER
+}
+
+// ─── MODELS ──────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(CLIENT)
+  department    String?
+  phone         String?
+  avatar        String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  ticketsCreated    Ticket[]        @relation("TicketCreator")
+  ticketsAssigned   Ticket[]        @relation("TicketAssignee")
+  comments          Comment[]
+  teamMemberships   TeamMember[]
+  notifications     Notification[]
+  sessions          Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  color       String       @default("#1a6fba")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members     TeamMember[]
+  tickets     Ticket[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  isLead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model Ticket {
+  id           String          @id @default(cuid())
+  ticketNumber Int             @unique @default(autoincrement())
+  subject      String
+  description  String          @db.Text
+  status       TicketStatus    @default(OPEN)
+  priority     TicketPriority  @default(MEDIUM)
+  category     TicketCategory  @default(OTHER)
+  department   String?
+
+  // SLA tracking
+  slaDeadline  DateTime?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+
+  // Relations
+  creatorId    String
+  assigneeId   String?
+  teamId       String?
+
+  creator      User            @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignee     User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  team         Team?           @relation(fields: [teamId], references: [id])
+  comments     Comment[]
+  attachments  Attachment[]
+  notifications Notification[]
+
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("tickets")
+}
+
+model Comment {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  isInternal  Boolean  @default(false)  // internal notes vs client-visible
+  ticketId    String
+  authorId    String
+
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User     @relation(fields: [authorId], references: [id])
+  attachments Attachment[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("comments")
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  filename   String
+  filepath   String
+  mimetype   String
+  size       Int
+  ticketId   String?
+  commentId  String?
+
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@map("attachments")
+}
+
+model KbArticle {
+  id          String        @id @default(cuid())
+  title       String
+  slug        String        @unique
+  content     String        @db.LongText
+  excerpt     String?       @db.Text
+  categoryId  String?
+  isPublished Boolean       @default(false)
+  viewCount   Int           @default(0)
+  authorId    String?
+
+  category    KbCategory?   @relation(fields: [categoryId], references: [id])
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("kb_articles")
+}
+
+model KbCategory {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  slug        String      @unique
+  description String?
+  icon        String?
+  color       String      @default("#1a6fba")
+  sortOrder   Int         @default(0)
+
+  articles    KbArticle[]
+
+  createdAt   DateTime    @default(now())
+
+  @@map("kb_categories")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("info")   // info | success | warning | error
+  isRead    Boolean  @default(false)
+  userId    String
+  ticketId  String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
