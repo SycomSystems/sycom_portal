@@ -4,25 +4,28 @@ import { NextResponse } from 'next/server'
 
 export default withAuth(
   function middleware(req) {
-    const token    = req.nextauth.token
+    const token = req.nextauth.token
     const pathname = req.nextUrl.pathname
-    const role     = (token as any)?.role
+    const role = (token as any)?.role
 
-    // Admin-only routes
-    if (pathname.startsWith('/admin') && role !== 'ADMIN') {
+    // Routes accessible by AGENT (not ADMIN-only)
+    const agentAllowed = [
+      '/admin/sklad',
+      '/admin/reports',
+    ]
+    const isAgentAllowed = agentAllowed.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+    // Admin-only routes (block non-ADMIN unless explicitly agent-allowed)
+    if (pathname.startsWith('/admin') && role !== 'ADMIN' && !isAgentAllowed) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
-    // Agent + Admin routes (reports, team management)
-    if (pathname.startsWith('/admin/reports') && role === 'CLIENT') {
+    // Agent-allowed admin routes: block CLIENT roles
+    if (isAgentAllowed && role !== 'ADMIN' && role !== 'AGENT') {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
-    if (pathname.startsWith('/admin/reports') && role === 'CLIENT_MANAGER') {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
-    }
-
-    // Knowledge base — staff only (ADMIN and AGENT)
+    // Knowledge base — staff only
     if (pathname.startsWith('/kb') && role !== 'ADMIN' && role !== 'AGENT') {
       return NextResponse.redirect(new URL('/tickets', req.url))
     }
@@ -51,5 +54,8 @@ export const config = {
     '/api/teams/:path*',
     '/api/comments/:path*',
     '/api/settings/:path*',
+    '/api/stock/:path*',
+    '/api/vykaz/:path*',
+    '/api/manual-hours/:path*',
   ],
 }
