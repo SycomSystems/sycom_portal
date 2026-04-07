@@ -4,14 +4,9 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText } from 'lucide-react'
 
-interface NavItem {
-  href: string
-  label: string
-  icon: React.ReactNode
-  roles?: string[]
-}
+interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -23,6 +18,7 @@ const navItems: NavItem[] = [
   { href: '/admin/teams', label: 'Timy', icon: <Users size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
 ]
 
@@ -34,20 +30,12 @@ export function Sidebar() {
   const [ticketBadge, setTicketBadge] = useState(0)
 
   useEffect(() => {
-    fetch('/api/settings/phone')
-      .then(r => r.json())
-      .then(d => setHelpdeskPhone(d.phone || '0948 938 217'))
-      .catch(() => {})
+    fetch('/api/settings/phone').then(r => r.json()).then(d => setHelpdeskPhone(d.phone || '0948 938 217')).catch(() => {})
   }, [])
 
   useEffect(() => {
     if (role !== 'ADMIN' && role !== 'AGENT') return
-    const fetchBadge = () => {
-      fetch('/api/tickets/badge')
-        .then(r => r.json())
-        .then(d => setTicketBadge(d.count ?? 0))
-        .catch(() => {})
-    }
+    const fetchBadge = () => { fetch('/api/tickets/badge').then(r => r.json()).then(d => setTicketBadge(d.count ?? 0)).catch(() => {}) }
     fetchBadge()
     const interval = setInterval(fetchBadge, 30000)
     return () => clearInterval(interval)
@@ -68,21 +56,12 @@ export function Sidebar() {
           const showBadge = isTickets && ticketBadge > 0
           return (
             <Link key={item.href} href={item.href}
-              className={cn(
-                'flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                isActive ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
-              )}>
+              className={cn('flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all', isActive ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
               <span className="flex items-center gap-3">
-                <span className={cn('shrink-0', isActive ? 'text-sycom-500' : 'text-gray-400')}>
-                  {item.icon}
-                </span>
+                <span className={cn('shrink-0', isActive ? 'text-sycom-500' : 'text-gray-400')}>{item.icon}</span>
                 {item.label}
               </span>
-              {showBadge && (
-                <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full">
-                  {ticketBadge > 99 ? '99+' : ticketBadge}
-                </span>
-              )}
+              {showBadge && (<span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full">{ticketBadge > 99 ? '99+' : ticketBadge}</span>)}
             </Link>
           )
         })}
