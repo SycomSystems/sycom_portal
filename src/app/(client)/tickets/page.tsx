@@ -2,6 +2,7 @@
 // src/app/(client)/tickets/page.tsx
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSession } from 'next-auth/react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import Link from 'next/link'
 import { Search, Plus, Filter, Eye, Building2 } from 'lucide-react'
@@ -63,11 +64,8 @@ export default function TicketsPage() {
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"
               placeholder="Hľadať podľa predmetu alebo popisu…" />
           </div>
-
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1">
-              <Filter size={10} /> Stav:
-            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Stav:</span>
             {STATUS_FILTERS.map(s => (
               <button key={s} onClick={() => setStatus(s)}
                 className={cn('text-xs font-semibold px-3 py-1.5 rounded-full border transition-all',
@@ -76,11 +74,8 @@ export default function TicketsPage() {
               </button>
             ))}
           </div>
-
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1">
-              <Filter size={10} /> Priorita:
-            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Priorita:</span>
             {PRIORITY_FILTERS.map(p => (
               <button key={p} onClick={() => setPriority(p)}
                 className={cn('text-xs font-semibold px-3 py-1.5 rounded-full border transition-all',
@@ -119,10 +114,10 @@ export default function TicketsPage() {
                     <p className="text-sm font-semibold text-gray-800 truncate">{t.subject}</p>
                   </td>
                   <td className="px-5 py-3.5">
-                    {t.creator?.client?.name ? (
+                    {t.client?.name ? (
                       <span className="flex items-center gap-1 text-xs text-gray-600">
                         <Building2 size={12} className="text-gray-400 shrink-0" />
-                        {t.creator.client.name}
+                        {t.client.name}
                       </span>
                     ) : (
                       <span className="text-xs text-gray-300">—</span>
@@ -138,9 +133,7 @@ export default function TicketsPage() {
                       {priorityLabels[t.priority] ?? t.priority}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-400">
-                    {formatDateTime(t.createdAt)}
-                  </td>
+                  <td className="px-5 py-3.5 text-xs text-gray-400">{formatDateTime(t.createdAt)}</td>
                   <td className="px-5 py-3.5">
                     <Link href={`/tickets/${t.id}`}
                       className="flex items-center gap-1.5 text-xs font-semibold text-sycom-500 hover:text-sycom-700 transition-colors">
