@@ -8,14 +8,12 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const supplierId = searchParams.get('supplierId')
   const clientId = searchParams.get('clientId')
   const type = searchParams.get('type')
-
   const where: any = {}
   if (from || to) {
     where.date = {}
@@ -25,7 +23,6 @@ export async function GET(req: NextRequest) {
   if (supplierId) where.supplierId = supplierId
   if (clientId) where.clientId = clientId
   if (type) where.type = type
-
   const movements = await prisma.stockMovement.findMany({
     where,
     include: {
@@ -44,61 +41,85 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const userId = (session.user as any).id
   const { type, stockItemId, quantity, pricePerUnit, vatRate, supplierId, clientId, note, date, newSupplierName } = await req.json()
-
-  if (!type || !stockItemId || !quantity) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-
+  if (!type || !stockItemId || !quantity) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   const qty = parseFloat(quantity)
   const ppu = parseFloat(pricePerUnit) || 0
   const total = Math.round(qty * ppu * 100) / 100
-
   let resolvedSupplierId = supplierId || null
   if (!supplierId && newSupplierName?.trim()) {
-    const s = await prisma.supplier.upsert({
-      where: { name: newSupplierName.trim() },
-      create: { name: newSupplierName.trim() },
-      update: {},
-    })
+    const s = await prisma.supplier.upsert({ where: { name: newSupplierName.trim() }, create: { name: newSupplierName.trim() }, update: {} })
     resolvedSupplierId = s.id
   }
-
   const positiveTypes = ['BUY', 'RETURN_FROM_CUSTOMER', 'CORRECTION']
   const delta = positiveTypes.includes(type) ? qty : -qty
-
   const [movement] = await prisma.$transaction([
     prisma.stockMovement.create({
-      data: {
-        type,
-        stockItemId,
-        quantity: qty,
-        pricePerUnit: ppu,
-        totalPrice: total,
-        vatRate: vatRate ?? 20,
-        supplierId: resolvedSupplierId,
-        clientId: clientId || null,
-        addedById: userId,
-        note: note?.trim() || null,
-        date: date ? new Date(date) : new Date(),
-      },
+      data: { type, stockItemId, quantity: qty, pricePerUnit: ppu, totalPrice: total, vatRate: vatRate ?? 20, supplierId: resolvedSupplierId, clientId: clientId || null, addedById: userId, note: note?.trim() || null, date: date ? new Date(date) : new Date() },
     }),
-    prisma.stockItem.update({
-      where: { id: stockItemId },
-      data: { currentStock: { increment: delta } },
-    }),
+    prisma.stockItem.update({ where: { id: stockItemId }, data: { currentStock: { increment: delta } } }),
   ])
-
   const full = await prisma.stockMovement.findUnique({
     where: { id: movement.id },
-    include: {
-      stockItem: true,
-      supplier: true,
-      client: { select: { id: true, name: true } },
-      addedBy: { select: { id: true, name: true } },
-    },
+    include: { stockItem: true, supplier: true, client: { select: { id: true, name: true } }, addedBy: { select: { id: true, name: true } } },
   })
   return NextResponse.json(full, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const { quantity, pricePerUnit, vatRate, note, date, clientId, supplierId } = await req.json()
+  // Recalculate stock delta if quantity changed
+  const existing = await prisma.stockMovement.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const newQty = quantity !== undefined ? parseFloat(quantity) : existing.quantity
+  const newPpu = pricePerUnit !== undefined ? parseFloat(pricePerUnit) : existing.pricePerUnit
+  const newTotal = Math.round(newQty * newPpu * 100) / 100
+  const positiveTypes = ['BUY', 'RETURN_FROM_CUSTOMER', 'CORRECTION']
+  const oldDelta = positiveTypes.includes(existing.type) ? existing.quantity : -existing.quantity
+  const newDelta = positiveTypes.includes(existing.type) ? newQty : -newQty
+  const stockDiff = newDelta - oldDelta
+  const [updated] = await prisma.$transaction([
+    prisma.stockMovement.update({
+      where: { id },
+      data: {
+        quantity: newQty, pricePerUnit: newPpu, totalPrice: newTotal,
+        vatRate: vatRate !== undefined ? parseFloat(vatRate) : existing.vatRate,
+        note: note !== undefined ? (note?.trim() || null) : existing.note,
+        date: date ? new Date(date) : existing.date,
+        clientId: clientId !== undefined ? (clientId || null) : existing.clientId,
+        supplierId: supplierId !== undefined ? (supplierId || null) : existing.supplierId,
+      },
+    }),
+    prisma.stockItem.update({ where: { id: existing.stockItemId }, data: { currentStock: { increment: stockDiff } } }),
+  ])
+  const full = await prisma.stockMovement.findUnique({
+    where: { id },
+    include: { stockItem: true, supplier: true, client: { select: { id: true, name: true } }, addedBy: { select: { id: true, name: true } } },
+  })
+  return NextResponse.json(full)
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const existing = await prisma.stockMovement.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const positiveTypes = ['BUY', 'RETURN_FROM_CUSTOMER', 'CORRECTION']
+  const delta = positiveTypes.includes(existing.type) ? -existing.quantity : existing.quantity
+  await prisma.$transaction([
+    prisma.stockMovement.delete({ where: { id } }),
+    prisma.stockItem.update({ where: { id: existing.stockItemId }, data: { currentStock: { increment: delta } } }),
+  ])
+  return NextResponse.json({ ok: true })
 }
