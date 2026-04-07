@@ -7,7 +7,7 @@ export default function VykazPageWrapper() {
     </Suspense>
   )
 }'use client'
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useQuery } from '@tanstack/react-query'
@@ -31,7 +31,7 @@ const HOURS_COLORS: Record<string, string> = {
   'Server mimo prac. casu': 'bg-orange-100 text-orange-700',
 }
 
-export default function VykazPage() {
+function VykazPage() {
   const searchParams = useSearchParams()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role
