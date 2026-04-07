@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download, Plus, X, Check, Ticket } from 'lucide-react'
 
@@ -25,7 +25,6 @@ export default function VykazPage() {
   const { data: session } = useSession()
   const role = (session?.user as any)?.role
   const sessionUserId = (session?.user as any)?.id
-  const qc = useQueryClient()
 
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
@@ -40,7 +39,6 @@ export default function VykazPage() {
   const [logoUrl, setLogoUrl] = useState<string|null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
-  // Add manual hours modal
   const [showModal, setShowModal] = useState(false)
   const [mDate, setMDate] = useState(today)
   const [mName, setMName] = useState('')
@@ -101,7 +99,10 @@ export default function VykazPage() {
     return rows
   }, [data?.hourRows, sortCol, sortDir])
 
-  const sortedGoods = useMemo(() => [...(data?.goodsRows ?? [])].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime()), [data?.goodsRows])
+  const sortedGoods = useMemo(() =>
+    [...(data?.goodsRows ?? [])].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime()),
+    [data?.goodsRows]
+  )
 
   const summary = data?.summary
   const periodLabel = fmtDate(from) + ' - ' + fmtDate(to)
@@ -136,7 +137,7 @@ export default function VykazPage() {
       }
       const cn = selectedClient?.name?.replace(/\s+/g,'_') ?? 'vsetci'
       pdf.save('vykaz_'+cn+'_'+from+'_'+to+'.pdf')
-    } catch(e) { alert('PDF chyba. Skuste tlac.') }
+    } catch { alert('PDF chyba. Skuste tlac.') }
     finally { setPdfLoading(false) }
   }
 
@@ -210,29 +211,31 @@ export default function VykazPage() {
             </h1>
             <p className="text-sm text-gray-500 mt-1">Odpracovane hodiny a predany tovar.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowModal(true)}
-              className="no-print flex items-center gap-2 px-4 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 transition-colors">
-              <Plus size={15} /> Vykaz Prace
-            </button>
-            {summary && (
-              <>
-                <button onClick={handlePrint}
-                  className="no-print flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors">
-                  <Printer size={15} /> Tlacit
-                </button>
-                <button onClick={handleDownloadPdf} disabled={pdfLoading}
-                  className="no-print flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors">
-                  <Download size={15} /> {pdfLoading ? 'Generujem...' : 'Stiahnut PDF'}
-                </button>
-              </>
-            )}
-          </div>
+          {summary && (
+            <div className="no-print flex items-center gap-2">
+              <button onClick={handlePrint}
+                className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors">
+                <Printer size={15} /> Tlacit
+              </button>
+              <button onClick={handleDownloadPdf} disabled={pdfLoading}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors">
+                <Download size={15} /> {pdfLoading ? 'Generujem...' : 'Stiahnut PDF'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Filters */}
+        {/* Filters + Add button */}
         <div className="no-print bg-white border border-gray-200 rounded-2xl p-5 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-end">
+            {/* LEFT: Add manual hours button */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Pridat hodiny</p>
+              <button onClick={() => setShowModal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors">
+                <Plus size={15} /> + Vykaz Prace
+              </button>
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Datum od</label>
               <input type="date" value={from} onChange={e=>setFrom(e.target.value)}
@@ -311,7 +314,7 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* ===== HOURS TABLE ===== */}
+            {/* Hours table */}
             <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-5">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Clock size={16} className="text-sycom-400" /> Odpracovane hodiny</h2>
@@ -336,7 +339,7 @@ export default function VykazPage() {
                     {sortedHours.length===0 ? (
                       <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">Ziadne hodiny pre dany filter.</td></tr>
                     ) : sortedHours.map((row: any, i: number) => (
-                      <tr key={i} className={'hover:bg-gray-50 ' + (row.source==='manual' ? 'bg-amber-50/40' : '')}>
+                      <tr key={i} className={'hover:bg-gray-50 '+(row.source==='manual'?'bg-amber-50/40':'')}>
                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 text-xs">{fmtDate(row.date)}</td>
                         <td className="px-4 py-2.5 text-gray-900 font-medium text-xs max-w-[220px] truncate">
                           {row.source==='ticket'
@@ -347,8 +350,8 @@ export default function VykazPage() {
                           <span className={'print-badge text-[10px] font-bold px-2 py-0.5 rounded-full '+(HOURS_COLORS[row.hoursTypeLabel]??'bg-gray-100 text-gray-600')}>{row.hoursTypeLabel}</span>
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs font-medium">{row.hours} hod</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0 ? fmt(row.pricePerHour)+' EUR' : '-'}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-xs font-semibold text-gray-800">{row.totalPrice>0 ? fmt(row.totalPrice)+' EUR' : '-'}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0?fmt(row.pricePerHour)+' EUR':'-'}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs font-semibold text-gray-800">{row.totalPrice>0?fmt(row.totalPrice)+' EUR':'-'}</td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500">{row.addedBy}</td>
                       </tr>
                     ))}
@@ -368,7 +371,7 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* ===== GOODS TABLE ===== */}
+            {/* Goods table */}
             <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Package size={16} className="text-blue-400" /> Predany tovar</h2>
@@ -411,7 +414,7 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* Grand total footer */}
+            {/* Grand total */}
             <div className="mt-4 flex items-center justify-end gap-6 text-sm px-2">
               <span className="text-gray-500">Prace: <strong className="text-gray-800">{fmt(summary.totalHoursPrice)} EUR</strong></span>
               <span className="text-gray-500">Tovar: <strong className="text-gray-800">{fmt(summary.totalGoodsPrice)} EUR</strong></span>
@@ -421,18 +424,20 @@ export default function VykazPage() {
         )}
       </div>
 
-      {/* ===== ADD MANUAL HOURS MODAL ===== */}
+      {/* Add manual hours modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Plus size={16} className="text-sycom-500" /> Zadat hodiny bez tiketu</h2>
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <Plus size={16} className="text-green-600" /> Zadat hodiny bez tiketu
+              </h2>
               <button onClick={()=>setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
             <div className="p-6 space-y-4">
               {mStatus && (
                 <div className={'flex items-center gap-2 px-3 py-2 rounded-xl text-sm '+(mStatus.ok?'bg-green-50 border border-green-200 text-green-700':'bg-red-50 border border-red-200 text-red-700')}>
-                  {mStatus.ok ? <Check size={14}/> : <X size={14}/>} {mStatus.msg}
+                  {mStatus.ok?<Check size={14}/>:<X size={14}/>} {mStatus.msg}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
@@ -449,23 +454,23 @@ export default function VykazPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Popis prace *</label>
-                <input type="text" value={mName} onChange={e=>setMName(e.target.value)} placeholder="Napr. Konfigurácia servera..."
+                <input type="text" value={mName} onChange={e=>setMName(e.target.value)} placeholder="Napr. Konfiguracia servera..."
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Typ hodin *</label>
                 <select value={mType} onChange={e=>setMType(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
-                  {HOURS_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
-              {role === 'ADMIN' && (
+              {role==='ADMIN' && (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Technik</label>
                   <select value={mUserId} onChange={e=>setMUserId(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                     <option value="">— moje hodiny —</option>
-                    {(staffUsers ?? []).map((u: any) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                    {(staffUsers??[]).map((u:any)=><option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </select>
                 </div>
               )}
@@ -474,14 +479,14 @@ export default function VykazPage() {
                 <select value={mClientId} onChange={e=>setMClientId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                   <option value="">— bez klienta —</option>
-                  {(clients ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {(clients??[]).map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={()=>setShowModal(false)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button>
               <button onClick={handleAddManual} disabled={mSubmitting||!mDate||!mName.trim()||!mHours}
-                className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
+                className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
                 <Plus size={15}/> {mSubmitting?'Ukladam...':'Pridat hodiny'}
               </button>
             </div>
@@ -490,4 +495,4 @@ export default function VykazPage() {
       )}
     </PortalLayout>
   )
-                        }
+                  }
