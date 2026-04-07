@@ -240,12 +240,10 @@ function VykazPage() {
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileText size={22} className="text-sycom-500" /> Vykaz</h1>
             <p className="text-sm text-gray-500 mt-1">Odpracovane hodiny a predany tovar.</p>
           </div>
-          {summary && (
-            <div className="no-print flex items-center gap-2">
-              <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"><Printer size={15}/> Tlacit</button>
-              <button onClick={handleDownloadPdf} disabled={pdfLoading} className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors"><Download size={15}/> {pdfLoading?'Generujem...':'Stiahnut PDF'}</button>
-            </div>
-          )}
+          <div className="no-print flex items-center gap-2">
+            <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors"><Plus size={15}/> + Vykaz Prace</button>
+            {summary && role === 'ADMIN' && (<><button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"><Printer size={15}/> Tlacit</button><button onClick={handleDownloadPdf} disabled={pdfLoading} className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors"><Download size={15}/> {pdfLoading?'Generujem...':'Stiahnut PDF'}</button></>)}
+          </div>
         </div>
         <div className="no-print bg-white border border-gray-200 rounded-2xl p-5 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
@@ -267,7 +265,7 @@ function VykazPage() {
                 <p className="text-[11px] text-gray-400 mt-1">Vygenerovane: {fmtDate(today)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            {role === 'ADMIN' && (<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="summary-card bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3"><div className="w-8 h-8 rounded-xl bg-sycom-50 flex items-center justify-center"><Clock size={15} className="text-sycom-500"/></div><p className="text-sm font-semibold text-gray-700">Hodiny podla typu</p></div>
                 <div className="space-y-1.5">
@@ -286,6 +284,7 @@ function VykazPage() {
                 <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between"><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Spolu bez DPH</p><p className="text-lg font-bold text-sycom-600">{fmt(summary.totalPrice)} EUR</p></div>
               </div>
             </div>
+            </div>)}
             <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-5">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Clock size={16} className="text-sycom-400"/> Odpracovane hodiny</h2><span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{sortedHours.length} zaznamov</span></div>
               <div className="overflow-x-auto"><table className="w-full text-sm">
