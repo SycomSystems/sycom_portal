@@ -298,7 +298,7 @@ function VykazPage() {
                   {sortedHours.length===0?(<tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">Ziadne hodiny.</td></tr>):sortedHours.map((row:any,i:number)=>(
                     <tr key={i} className={'hover:bg-gray-50 '+(row.source==='manual'?'bg-amber-50/40':'')}>
                       <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 text-xs">{fmtDate(row.date)}</td>
-                      <td className="px-4 py-2.5 text-gray-900 font-medium text-xs max-w-[220px] truncate">{row.source==='ticket'?<span className="flex items-center gap-1"><Ticket size={11} className="text-sycom-400 shrink-0"/>{row.name}</span>:row.name}</td>
+                      <td className="px-4 py-2.5 text-gray-900 font-medium text-xs max-w-[220px] truncate">{row.source==='ticket'?<a href={'/tickets/'+row.ticketId} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sycom-600 hover:text-sycom-800 hover:underline"><Ticket size={11} className="text-sycom-400 shrink-0"/>{row.name}</a>:row.name}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap"><span className={'print-badge text-[10px] font-bold px-2 py-0.5 rounded-full '+(HOURS_COLORS[row.hoursTypeLabel]??'bg-gray-100 text-gray-600')}>{row.hoursTypeLabel}</span></td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs font-medium">{row.hours} hod</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0?fmt(row.pricePerHour)+' EUR':'-'}</td>
