@@ -160,6 +160,7 @@ model Comment {
   body        String   @db.Text
   isInternal  Boolean  @default(false)
   workedHours Float    @default(0)
+  hoursType   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   ticketId    String
