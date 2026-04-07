@@ -1,4 +1,12 @@
-'use client'
+
+
+export default function VykazPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <VykazPage />
+    </Suspense>
+  )
+}'use client'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PortalLayout } from '@/components/layout/PortalLayout'
