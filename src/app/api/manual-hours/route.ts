@@ -8,12 +8,10 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const clientId = searchParams.get('clientId')
-
   const where: any = {}
   if (from || to) {
     where.date = {}
@@ -21,7 +19,6 @@ export async function GET(req: NextRequest) {
     if (to) { const d = new Date(to); d.setHours(23,59,59,999); where.date.lte = d }
   }
   if (clientId) where.clientId = clientId
-
   const rows = await prisma.manualHours.findMany({
     where,
     include: {
@@ -38,32 +35,39 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const sessionUserId = (session.user as any).id
   const { date, name, hoursType, hours, userId, clientId } = await req.json()
-
-  if (!date || !name || !hoursType || !hours) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-
-  // AGENT can only add for themselves
+  if (!date || !name || !hoursType || !hours) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   const resolvedUserId = role === 'AGENT' ? sessionUserId : (userId || sessionUserId)
-
   const row = await prisma.manualHours.create({
-    data: {
-      date: new Date(date),
-      name: name.trim(),
-      hoursType,
-      hours: parseFloat(hours),
-      userId: resolvedUserId,
-      clientId: clientId || null,
-    },
-    include: {
-      user: { select: { id: true, name: true } },
-      client: { select: { id: true, name: true } },
-    },
+    data: { date: new Date(date), name: name.trim(), hoursType, hours: parseFloat(hours), userId: resolvedUserId, clientId: clientId || null },
+    include: { user: { select: { id: true, name: true } }, client: { select: { id: true, name: true } } },
   })
   return NextResponse.json(row, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const { date, name, hoursType, hours, clientId } = await req.json()
+  const existing = await prisma.manualHours.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const updated = await prisma.manualHours.update({
+    where: { id },
+    data: {
+      date: date ? new Date(date) : existing.date,
+      name: name !== undefined ? name.trim() : existing.name,
+      hoursType: hoursType ?? existing.hoursType,
+      hours: hours !== undefined ? parseFloat(hours) : existing.hours,
+      clientId: clientId !== undefined ? (clientId || null) : existing.clientId,
+    },
+    include: { user: { select: { id: true, name: true } }, client: { select: { id: true, name: true } } },
+  })
+  return NextResponse.json(updated)
 }
 
 export async function DELETE(req: NextRequest) {
@@ -71,11 +75,9 @@ export async function DELETE(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
-
   await prisma.manualHours.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }
