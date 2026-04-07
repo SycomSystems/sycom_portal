@@ -18,7 +18,6 @@ export default function VykazPage() {
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const today = now.toISOString().slice(0, 10)
-
   const [from, setFrom] = useState(firstDay)
   const [to, setTo] = useState(today)
   const [clientId, setClientId] = useState('')
@@ -27,14 +26,9 @@ export default function VykazPage() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => fetch('/api/clients').then(r => r.json()),
-  })
-
+  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => fetch('/api/clients').then(r => r.json()) })
   const params = new URLSearchParams({ from, to })
   if (clientId) params.set('clientId', clientId)
-
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['vykaz', from, to, clientId],
     queryFn: () => fetch('/api/vykaz?' + params).then(r => r.json()),
@@ -75,13 +69,11 @@ export default function VykazPage() {
   }, [data, sortCol, sortDir])
 
   const summary = data?.summary
+  const periodLabel = fmtDate(from) + ' - ' + fmtDate(to)
+  const clientLabel = selectedClient?.name ?? 'Vsetci klienti'
 
-  // --- PRINT ---
-  function handlePrint() {
-    window.print()
-  }
+  function handlePrint() { window.print() }
 
-  // --- PDF DOWNLOAD via jsPDF + html2canvas ---
   async function handleDownloadPdf() {
     if (!printRef.current || !summary) return
     setPdfLoading(true)
@@ -98,8 +90,8 @@ export default function VykazPage() {
       const pageH = pdf.internal.pageSize.getHeight()
       const imgW = pageW - 16
       const imgH = (canvas.height * imgW) / canvas.width
-      let y = 8
       let remaining = imgH
+      let first = true
       while (remaining > 0) {
         const sliceH = Math.min(remaining, pageH - 16)
         const srcY = (imgH - remaining) * (canvas.height / imgH)
@@ -109,11 +101,12 @@ export default function VykazPage() {
         sliceCanvas.height = srcH
         const ctx = sliceCanvas.getContext('2d')!
         ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH)
-        if (y > 8) pdf.addPage()
+        if (!first) pdf.addPage()
         pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 8, 8, imgW, sliceH)
         remaining -= sliceH
+        first = false
       }
-      const clientName = selectedClient?.name ?? 'vsetci'
+      const clientName = selectedClient?.name?.replace(/\s+/g, '_') ?? 'vsetci'
       pdf.save('vykaz_' + clientName + '_' + from + '_' + to + '.pdf')
     } catch (e) {
       console.error('PDF error', e)
@@ -122,9 +115,6 @@ export default function VykazPage() {
       setPdfLoading(false)
     }
   }
-
-  const periodLabel = fmtDate(from) + ' - ' + fmtDate(to)
-  const clientLabel = selectedClient?.name ?? 'Vsetci klienti'
 
   return (
     <PortalLayout>
@@ -138,15 +128,13 @@ export default function VykazPage() {
           table { font-size: 9px !important; border-collapse: collapse; width: 100%; }
           th, td { padding: 3px 5px !important; border-bottom: 1px solid #e5e7eb; }
           th { font-size: 8px !important; }
-          .print-badge { font-size: 8px !important; padding: 1px 4px !important; }
+          .print-badge { font-size: 8px !important; padding: 1px 4px !important; border-radius: 4px; }
           .summary-card { padding: 8px !important; }
-          .summary-title { font-size: 9px !important; }
-          .summary-amount { font-size: 16px !important; }
+          .summary-value { font-size: 16px !important; }
         }
       `}</style>
 
       <div className="max-w-6xl mx-auto py-8 px-6">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -200,23 +188,32 @@ export default function VykazPage() {
 
         {summary && (
           <div ref={printRef} id="vykaz-print">
-            {/* Print header */}
-            <div className="hidden print:block mb-4 pb-3 border-b-2 border-gray-800">
-              <div className="flex items-center justify-between">
+
+            {/* ===== LOGO HEADER — visible only in print/PDF ===== */}
+            <div className="hidden print:block mb-5 pb-4 border-b-2 border-gray-800">
+              <div className="flex items-start justify-between">
                 <div>
-                  <h1 className="text-base font-bold">Vykaz prac a tovaru</h1>
-                  <p className="text-xs text-gray-600">Obdobie: {periodLabel} &nbsp;|&nbsp; Klient: {clientLabel}</p>
+                  <div className="flex items-baseline gap-0 mb-0.5">
+                    <span className="text-[22px] font-extrabold leading-none" style={{color:'#1a6fba'}}>Sycom</span>
+                    <span className="text-[22px] font-extrabold leading-none text-gray-400">Portal</span>
+                  </div>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-semibold mt-0.5">Sycom Systems s.r.o.</p>
                 </div>
-                <p className="text-xs text-gray-400">Sycom IT Portal</p>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900">Vykaz prac a tovaru</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Obdobie: {periodLabel}</p>
+                  <p className="text-[10px] text-gray-500">Klient: {clientLabel}</p>
+                  <p className="text-[9px] text-gray-400 mt-1">Vygenerovane: {fmtDate(today)}</p>
+                </div>
               </div>
             </div>
 
-            {/* Summary */}
+            {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="summary-card bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-sycom-50 flex items-center justify-center"><Clock size={15} className="text-sycom-500" /></div>
-                  <p className="summary-title text-sm font-semibold text-gray-700">Hodiny podla typu</p>
+                  <p className="text-sm font-semibold text-gray-700">Hodiny podla typu</p>
                 </div>
                 <div className="space-y-1.5">
                   {Object.entries(summary.hoursByType).map(([type, hours]: [string, any]) => (
@@ -231,17 +228,17 @@ export default function VykazPage() {
               <div className="summary-card bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center"><Euro size={15} className="text-green-600" /></div>
-                  <p className="summary-title text-sm font-semibold text-gray-700">Cena za prace</p>
+                  <p className="text-sm font-semibold text-gray-700">Cena za prace</p>
                 </div>
-                <p className="summary-amount text-3xl font-bold text-gray-900">{fmt(summary.totalHoursPrice)} <span className="text-base font-medium text-gray-400">EUR</span></p>
+                <p className="summary-value text-3xl font-bold text-gray-900">{fmt(summary.totalHoursPrice)} <span className="text-base font-medium text-gray-400">EUR</span></p>
                 <p className="text-xs text-gray-400 mt-1">bez DPH</p>
               </div>
               <div className="summary-card bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center"><Package size={15} className="text-blue-600" /></div>
-                  <p className="summary-title text-sm font-semibold text-gray-700">Cena za tovar</p>
+                  <p className="text-sm font-semibold text-gray-700">Cena za tovar</p>
                 </div>
-                <p className="summary-amount text-3xl font-bold text-gray-900">{fmt(summary.totalGoodsPrice)} <span className="text-base font-medium text-gray-400">EUR</span></p>
+                <p className="summary-value text-3xl font-bold text-gray-900">{fmt(summary.totalGoodsPrice)} <span className="text-base font-medium text-gray-400">EUR</span></p>
                 <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Spolu bez DPH</p>
                   <p className="text-lg font-bold text-sycom-600">{fmt(summary.totalPrice)} EUR</p>
@@ -249,7 +246,7 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* Table */}
+            {/* Detail table */}
             <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-gray-900">Detail</h2>
