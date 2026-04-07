@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useQuery } from '@tanstack/react-query'
-import { Clock, Package, Euro, FileText, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Clock, Package, Euro, FileText, ExternalLink, ChevronDown, ChevronUp, Printer } from 'lucide-react'
 
 function fmt(n: number) { return n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sk-SK') }
@@ -39,11 +39,12 @@ export default function VykazPage() {
     enabled: false,
   })
 
+  const selectedClient = (clients ?? []).find((c: any) => c.id === clientId)
+
   function SortIcon({ col }: { col: string }) {
     if (sortCol !== col) return <ChevronUp size={12} className="text-gray-300" />
     return sortDir === 'asc' ? <ChevronUp size={12} className="text-sycom-500" /> : <ChevronDown size={12} className="text-sycom-500" />
   }
-
   function toggleSort(col: string) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
@@ -73,18 +74,41 @@ export default function VykazPage() {
 
   const summary = data?.summary
 
+  function handlePrint() { window.print() }
+
   return (
     <PortalLayout>
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 12mm; }
+          body * { visibility: hidden; }
+          #vykaz-print, #vykaz-print * { visibility: visible; }
+          #vykaz-print { position: absolute; top: 0; left: 0; width: 100%; }
+          .no-print { display: none !important; }
+          table { font-size: 10px; }
+          th, td { padding: 4px 6px !important; }
+        }
+      `}</style>
+
       <div className="max-w-6xl mx-auto py-8 px-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText size={22} className="text-sycom-500" /> Vykaz
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Prehled odpracovanych hodin a predaneho tovaru pre klienta.</p>
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <FileText size={22} className="text-sycom-500" /> Vykaz
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">Prehled odpracovanych hodin a predaneho tovaru.</p>
+          </div>
+          {summary && (
+            <button onClick={handlePrint}
+              className="no-print flex items-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 transition-colors">
+              <Printer size={15} /> Exportovat do PDF
+            </button>
+          )}
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
+        <div className="no-print bg-white border border-gray-200 rounded-2xl p-5 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Datum od</label>
@@ -113,16 +137,27 @@ export default function VykazPage() {
           </div>
         </div>
 
-        {isLoading && (
-          <div className="text-center py-12 text-gray-400 text-sm">Nacitavam...</div>
-        )}
+        {isLoading && <div className="text-center py-12 text-gray-400 text-sm">Nacitavam...</div>}
 
         {summary && (
-          <>
+          <div id="vykaz-print">
+            {/* Print header - only visible when printing */}
+            <div className="hidden print:block mb-4 pb-3 border-b-2 border-gray-800">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-bold">Vykaz prac a tovaru</h1>
+                  <p className="text-sm text-gray-600">
+                    Obdobie: {fmtDate(from)} - {fmtDate(to)}
+                    {selectedClient ? ' | Klient: ' + selectedClient.name : ' | Vsetci klienti'}
+                  </p>
+                </div>
+                <p className="text-xs text-gray-400">Sycom IT Portal</p>
+              </div>
+            </div>
+
             {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              {/* Hours by type */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:col-span-1">
+              <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-sycom-50 flex items-center justify-center"><Clock size={15} className="text-sycom-500" /></div>
                   <p className="text-sm font-semibold text-gray-700">Hodiny podla typu</p>
@@ -137,8 +172,6 @@ export default function VykazPage() {
                   {Object.keys(summary.hoursByType).length === 0 && <p className="text-xs text-gray-400">Ziadne hodiny</p>}
                 </div>
               </div>
-
-              {/* Price for work */}
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center"><Euro size={15} className="text-green-600" /></div>
@@ -147,8 +180,6 @@ export default function VykazPage() {
                 <p className="text-3xl font-bold text-gray-900">{fmt(summary.totalHoursPrice)} <span className="text-base font-medium text-gray-400">EUR</span></p>
                 <p className="text-xs text-gray-400 mt-1">bez DPH</p>
               </div>
-
-              {/* Price for goods + total */}
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center"><Package size={15} className="text-blue-600" /></div>
@@ -174,55 +205,54 @@ export default function VykazPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {[['date','Datum'],['name','Nazov'],['type','Typ hodin / Tovar'],['qty','Pocet / Mnozstvo'],['price','Cena/hod alebo Cena/ks'],['total','Spolu bez DPH'],['who','Zapisal'],['link','Tiket']].map(([col,label]) => (
+                      {[['date','Datum'],['name','Nazov'],['type','Typ'],['qty','Pocet'],['price','Cena/hod alebo Cena/ks'],['total','Spolu bez DPH'],['who','Zapisal'],['link','Tiket']].map(([col,label]) => (
                         <th key={col} onClick={() => toggleSort(col)}
-                          className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 select-none whitespace-nowrap">
+                          className="no-print px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 select-none whitespace-nowrap">
                           <span className="flex items-center gap-1">{label} <SortIcon col={col} /></span>
                         </th>
+                      ))}
+                      {/* Print-only headers without sort icons */}
+                      {['Datum','Nazov','Typ','Pocet','Cena/j','Spolu','Zapisal','Tiket'].map(label => (
+                        <th key={label} className="hidden print:table-cell px-3 py-2 text-left text-xs font-bold text-gray-700 border-b border-gray-300">{label}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {allRows.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">Ziadne zaznamy pre zvolene filtre.</td></tr>
+                      <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">Ziadne zaznamy.</td></tr>
                     ) : allRows.map((row: any, i: number) => (
                       <tr key={i} className={'hover:bg-gray-50 transition-colors ' + (row._type === 'goods' ? 'bg-blue-50/30' : '')}>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-500">{fmtDate(row.date)}</td>
-                        <td className="px-4 py-3 text-gray-900 font-medium max-w-xs">
-                          {row._type === 'hours' ? (
-                            <span>{row.ticketSubject}</span>
-                          ) : (
-                            <span className="flex items-center gap-1"><Package size={12} className="text-blue-400 shrink-0" />{row.itemName}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {row._type === 'hours' ? (
-                            <span className={'text-[11px] font-bold px-2 py-0.5 rounded-full ' + (HOURS_COLORS[row.hoursTypeLabel] ?? 'bg-gray-100 text-gray-600')}>
-                              {row.hoursTypeLabel}
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Tovar</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap font-medium">
-                          {row._type === 'hours' ? row.hours + ' hod' : row.quantity + ' ks'}
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">{fmtDate(row.date)}</td>
+                        <td className="px-4 py-3 text-gray-900 font-medium max-w-xs text-xs">
+                          {row._type === 'hours'
+                            ? row.ticketSubject
+                            : <span className="flex items-center gap-1"><Package size={11} className="text-blue-400 shrink-0" />{row.itemName}</span>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {row._type === 'hours'
-                            ? (row.pricePerHour > 0 ? fmt(row.pricePerHour) + ' EUR' : <span className="text-gray-300">—</span>)
+                            ? <span className={'text-[10px] font-bold px-2 py-0.5 rounded-full ' + (HOURS_COLORS[row.hoursTypeLabel] ?? 'bg-gray-100 text-gray-600')}>{row.hoursTypeLabel}</span>
+                            : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Tovar</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs font-medium">
+                          {row._type === 'hours' ? row.hours + ' hod' : row.quantity + ' ks'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs">
+                          {row._type === 'hours'
+                            ? (row.pricePerHour > 0 ? fmt(row.pricePerHour) + ' EUR' : '-')
                             : fmt(row.pricePerUnit) + ' EUR'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap font-semibold text-gray-800">
-                          {row.totalPrice > 0 ? fmt(row.totalPrice) + ' EUR' : <span className="text-gray-300">—</span>}
+                        <td className="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-800">
+                          {row.totalPrice > 0 ? fmt(row.totalPrice) + ' EUR' : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-500">{row.addedBy}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{row.addedBy}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {row._type === 'hours' && row.ticketId ? (
                             <a href={'/tickets/' + row.ticketId} target="_blank" rel="noreferrer"
-                              className="flex items-center gap-1 text-sycom-500 hover:text-sycom-700 text-xs font-medium">
+                              className="no-print flex items-center gap-1 text-sycom-500 hover:text-sycom-700 text-xs font-medium">
                               #T-{row.ticketNumber} <ExternalLink size={11} />
                             </a>
-                          ) : <span className="text-gray-300">—</span>}
+                          ) : <span className="text-gray-300 text-xs">-</span>}
+                          <span className="hidden print:inline text-xs">{row._type === 'hours' && row.ticketNumber ? '#T-' + row.ticketNumber : '-'}</span>
                         </td>
                       </tr>
                     ))}
@@ -237,7 +267,7 @@ export default function VykazPage() {
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </PortalLayout>
