@@ -10,7 +10,7 @@ import { formatDateTime, priorityLabels, statusLabels, categoryLabels, isSlaBrea
 import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle, Trash2, Pencil, X, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const STATUS_OPTIONS  = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
+const STATUS_OPTIONS   = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 const CATEGORY_OPTIONS = ['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']
 
@@ -40,18 +40,15 @@ export default function TicketDetailPage() {
   const role              = (session?.user as any)?.role
   const queryClient       = useQueryClient()
 
-  // Comment / hours
   const [comment,     setComment]     = useState('')
   const [isInternal,  setIsInternal]  = useState(false)
   const [logHours,    setLogHours]    = useState('')
   const [logHoursErr, setLogHoursErr] = useState(false)
   const [deletingId,  setDeletingId]  = useState<string | null>(null)
+  const [assigneeId,  setAssigneeId]  = useState('')
+  const [newStatus,   setNewStatus]   = useState('')
 
-  // Sidebar actions
-  const [assigneeId, setAssigneeId] = useState('')
-  const [newStatus,  setNewStatus]  = useState('')
-
-  // Admin inline edit
+  // Admin inline edit state
   const [editing,      setEditing]      = useState(false)
   const [editSubject,  setEditSubject]  = useState('')
   const [editDesc,     setEditDesc]     = useState('')
@@ -114,17 +111,18 @@ export default function TicketDetailPage() {
     setEditDesc(ticket.description)
     setEditPriority(ticket.priority)
     setEditCategory(ticket.category)
-    setEditClientId(ticket.creator?.client?.id ?? '')
+    // Use ticket.clientId directly — independent of creator
+    setEditClientId(ticket.clientId ?? '')
     setEditing(true)
   }
 
   function handleSaveEdit() {
     const payload: any = {}
-    if (editSubject  !== ticket.subject)      payload.subject     = editSubject
-    if (editDesc     !== ticket.description)  payload.description = editDesc
-    if (editPriority !== ticket.priority)     payload.priority    = editPriority
-    if (editCategory !== ticket.category)     payload.category    = editCategory
-    if (editClientId !== (ticket.creator?.client?.id ?? '')) payload.clientId = editClientId || null
+    if (editSubject  !== ticket.subject)     payload.subject     = editSubject
+    if (editDesc     !== ticket.description) payload.description = editDesc
+    if (editPriority !== ticket.priority)    payload.priority    = editPriority
+    if (editCategory !== ticket.category)    payload.category    = editCategory
+    if (editClientId !== (ticket.clientId ?? '')) payload.clientId = editClientId || null
     if (Object.keys(payload).length === 0) { setEditing(false); return }
     mutation.mutate(payload)
   }
@@ -151,13 +149,14 @@ export default function TicketDetailPage() {
     </PortalLayout>
   )
 
-  const isStaff    = role === 'ADMIN' || role === 'AGENT'
-  const isAdmin    = role === 'ADMIN'
+  const isStaff     = role === 'ADMIN' || role === 'AGENT'
+  const isAdmin     = role === 'ADMIN'
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn     = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours  = ticket.totalWorkedHours ?? 0
   const isResolved  = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
-  const clientName  = ticket.creator?.client?.name
+  // Use ticket.client directly — set independently per ticket
+  const clientName  = ticket.client?.name
 
   return (
     <PortalLayout>
@@ -177,10 +176,9 @@ export default function TicketDetailPage() {
                 {!slaBreached && slaWarn && <span className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full"><Clock size={11} /> SLA blíži</span>}
                 {isStaff && totalHours > 0 && <span className="flex items-center gap-1 text-xs font-bold text-sycom-600 bg-sycom-50 px-2 py-0.5 rounded-full"><Timer size={11} /> {formatHours(totalHours)} celkom</span>}
               </div>
-
               {editing ? (
                 <input value={editSubject} onChange={e => setEditSubject(e.target.value)}
-                  className="w-full text-xl font-bold text-gray-900 px-3 py-1.5 border border-sycom-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sycom-100 mb-2" />
+                  className="w-full text-xl font-bold px-3 py-1.5 border border-sycom-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sycom-100 mb-2" />
               ) : (
                 <h1 className="text-xl font-bold text-gray-900 mb-1">{ticket.subject}</h1>
               )}
@@ -191,7 +189,7 @@ export default function TicketDetailPage() {
                 {statusLabels[ticket.status] ?? ticket.status}
               </span>
               {isAdmin && !editing && (
-                <button onClick={startEdit} title="Upraviť tiket (admin)"
+                <button onClick={startEdit} title="Upraviť tiket"
                   className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors">
                   <Pencil size={14} />
                 </button>
@@ -238,9 +236,7 @@ export default function TicketDetailPage() {
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
               <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">Priradený</p>
-              {ticket.assignee
-                ? <span className="flex items-center gap-1 text-gray-800 font-medium"><User size={11} /> {ticket.assignee.name}</span>
-                : <span className="text-gray-300">Nepriradený</span>}
+              {ticket.assignee ? <span className="flex items-center gap-1 text-gray-800 font-medium"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradený</span>}
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
               <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">SLA</p>
@@ -269,11 +265,9 @@ export default function TicketDetailPage() {
             )}
           </div>
 
-          {/* Edit save/cancel */}
           {editing && (
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => setEditing(false)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+              <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
                 <X size={14} /> Zrušiť
               </button>
               <button onClick={handleSaveEdit} disabled={mutation.isPending}
@@ -319,7 +313,6 @@ export default function TicketDetailPage() {
                     )}
                     {isAdmin && c.workedHours > 0 && (
                       <button onClick={() => handleDeleteComment(c.id)} disabled={deletingId === c.id}
-                        title="Vymazať záznam práce"
                         className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                         <Trash2 size={13} />
                       </button>
