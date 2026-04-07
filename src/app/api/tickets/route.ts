@@ -10,7 +10,6 @@ const createSchema = z.object({
   description: z.string().min(10),
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
-  // clientId is used by ADMIN/AGENT to set the creator's client before creating
   clientId:    z.string().optional(),
 })
 
@@ -34,7 +33,7 @@ export async function GET(req: NextRequest) {
   } else if (role === 'CLIENT_MANAGER') {
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (me?.clientId) {
-      where.creator = { clientId: me.clientId }
+      where.clientId = me.clientId
     } else {
       where.creatorId = userId
     }
@@ -51,7 +50,8 @@ export async function GET(req: NextRequest) {
     prisma.ticket.findMany({
       where,
       include: {
-        creator:  { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
+        creator:  { select: { id: true, name: true, email: true } },
+        client:   { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true } },
         team:     { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
@@ -79,13 +79,11 @@ export async function POST(req: NextRequest) {
   const isStaff = role === 'ADMIN' || role === 'AGENT'
   const { subject, description, priority, category, clientId } = parsed.data
 
-  // If ADMIN/AGENT supplied a clientId, update the creator's clientId first
-  // so the ticket's client is reflected via the creator relation
-  if (isStaff && clientId) {
-    await prisma.user.update({
-      where: { id: userId },
-      data:  { clientId },
-    })
+  // For CLIENT/CLIENT_MANAGER — automatically set clientId from their own profile
+  let resolvedClientId = clientId ?? null
+  if (!isStaff) {
+    const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
+    resolvedClientId = me?.clientId ?? null
   }
 
   const ticket = await prisma.ticket.create({
@@ -94,11 +92,13 @@ export async function POST(req: NextRequest) {
       description,
       priority,
       category,
+      clientId:    resolvedClientId,
       slaDeadline: getSlaDeadline(priority),
       creatorId:   userId,
     },
     include: {
-      creator: { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
+      creator: { select: { id: true, name: true, email: true } },
+      client:  { select: { id: true, name: true } },
     },
   })
 
