@@ -10,6 +10,7 @@ const createSchema = z.object({
   description: z.string().min(10),
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
+  // clientId is used by ADMIN/AGENT to set the creator's client before creating
   clientId:    z.string().optional(),
 })
 
@@ -73,30 +74,29 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const userId   = (session.user as any).id
-  const role     = (session.user as any).role
-  const isStaff  = role === 'ADMIN' || role === 'AGENT'
+  const userId  = (session.user as any).id
+  const role    = (session.user as any).role
+  const isStaff = role === 'ADMIN' || role === 'AGENT'
   const { subject, description, priority, category, clientId } = parsed.data
 
-  // If staff passed a clientId, update the creator's client or just store it on the ticket
-  // If client user, their clientId comes from their own profile automatically via creator relation
-  // We store clientId on the ticket itself for easy querying
-  const ticketData: any = {
-    subject,
-    description,
-    priority,
-    category,
-    slaDeadline: getSlaDeadline(priority),
-    creatorId:   userId,
-  }
-
-  // ADMIN/AGENT can override which client this ticket belongs to
+  // If ADMIN/AGENT supplied a clientId, update the creator's clientId first
+  // so the ticket's client is reflected via the creator relation
   if (isStaff && clientId) {
-    ticketData.clientId = clientId
+    await prisma.user.update({
+      where: { id: userId },
+      data:  { clientId },
+    })
   }
 
   const ticket = await prisma.ticket.create({
-    data: ticketData,
+    data: {
+      subject,
+      description,
+      priority,
+      category,
+      slaDeadline: getSlaDeadline(priority),
+      creatorId:   userId,
+    },
     include: {
       creator: { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
     },
