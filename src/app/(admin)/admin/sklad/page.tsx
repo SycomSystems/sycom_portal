@@ -23,12 +23,15 @@ const MOVEMENT_COLORS: Record<MovementType, string> = {
   CORRECTION: 'bg-gray-100 text-gray-700',
 }
 
-interface StockItem { id: string; name: string; sku: string|null; category: string|null; unit: string; vatRate: number; minStock: number; currentStock: number }
+interface StockItem {
+  id: string; name: string; sku: string|null; category: string|null
+  unit: string; vatRate: number; minStock: number; currentStock: number
+}
 interface Supplier { id: string; name: string }
 interface Client { id: string; name: string }
 interface Movement {
-  id: string; type: MovementType; quantity: number; pricePerUnit: number; totalPrice: number
-  vatRate: number; note: string|null; date: string
+  id: string; type: MovementType; quantity: number; pricePerUnit: number
+  totalPrice: number; vatRate: number; note: string|null; date: string
   stockItem: StockItem
   supplier: Supplier|null
   client: { id: string; name: string }|null
@@ -37,6 +40,62 @@ interface Movement {
 
 function fmt(n: number) { return n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sk-SK') }
+
+// Reusable autocomplete component
+function Autocomplete({
+  label, value, onChange, onSelect, suggestions, onNotFound, notFoundLabel,
+  placeholder, required,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  onSelect: (id: string, name: string) => void
+  suggestions: { id: string; name: string; sub?: string }[]
+  onNotFound?: (name: string) => void
+  notFoundLabel?: string
+  placeholder?: string
+  required?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const filtered = value.length > 0
+    ? suggestions.filter(s => s.name.toLowerCase().includes(value.toLowerCase()))
+    : []
+  const exactMatch = suggestions.some(s => s.name.toLowerCase() === value.toLowerCase())
+
+  return (
+    <div className="relative">
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}{required && ' *'}</label>
+      <input
+        type="text" value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100"
+      />
+      {open && value.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full border border-gray-200 rounded-xl overflow-hidden shadow-lg bg-white max-h-44 overflow-y-auto">
+          {filtered.map(s => (
+            <button key={s.id} onMouseDown={() => { onSelect(s.id, s.name); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors flex items-center justify-between">
+              <span>{s.name}</span>
+              {s.sub && <span className="text-xs text-gray-400 ml-2">{s.sub}</span>}
+            </button>
+          ))}
+          {!exactMatch && onNotFound && (
+            <button onMouseDown={() => { onNotFound(value); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm text-green-700 font-medium hover:bg-green-50 transition-colors border-t border-gray-100">
+              + {notFoundLabel ?? 'Pridat'} &quot;{value}&quot;
+            </button>
+          )}
+          {filtered.length === 0 && exactMatch && (
+            <p className="px-3 py-2 text-sm text-gray-400">Ziadne vysledky.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function SkladPage() {
   const [movements, setMovements] = useState<Movement[]>([])
@@ -47,32 +106,36 @@ export default function SkladPage() {
   const [modal, setModal] = useState<'buy'|'sell'|null>(null)
   const [status, setStatus] = useState<{type:'success'|'error';msg:string}|null>(null)
 
+  // Filters
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterSupplier, setFilterSupplier] = useState('')
   const [filterClient, setFilterClient] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
-  const [sortCol, setSortCol] = useState<string>('date')
+  const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc')
 
-  const [buyItem, setBuyItem] = useState('')
-  const [buyItemSearch, setBuyItemSearch] = useState('')
+  // Buy form
+  const [buyItemId, setBuyItemId] = useState('')
+  const [buyItemName, setBuyItemName] = useState('')
+  const [buyIsNew, setBuyIsNew] = useState(false)
   const [buyQty, setBuyQty] = useState('')
   const [buyPrice, setBuyPrice] = useState('')
   const [buyVat, setBuyVat] = useState('20')
-  const [buySupplier, setBuySupplier] = useState('')
-  const [buySupplierSearch, setBuySupplierSearch] = useState('')
+  const [buySupplierId, setBuySupplierId] = useState('')
+  const [buySupplierName, setBuySupplierName] = useState('')
   const [buyDate, setBuyDate] = useState(new Date().toISOString().slice(0,10))
   const [buyNote, setBuyNote] = useState('')
   const [buySubmitting, setBuySubmitting] = useState(false)
 
-  const [sellItem, setSellItem] = useState('')
-  const [sellItemSearch, setSellItemSearch] = useState('')
+  // Sell form
+  const [sellItemId, setSellItemId] = useState('')
+  const [sellItemName, setSellItemName] = useState('')
   const [sellQty, setSellQty] = useState('')
   const [sellPrice, setSellPrice] = useState('')
-  const [sellClient, setSellClient] = useState('')
-  const [sellClientSearch, setSellClientSearch] = useState('')
+  const [sellClientId, setSellClientId] = useState('')
+  const [sellClientName, setSellClientName] = useState('')
   const [sellDate, setSellDate] = useState(new Date().toISOString().slice(0,10))
   const [sellNote, setSellNote] = useState('')
   const [sellSubmitting, setSellSubmitting] = useState(false)
@@ -141,38 +204,53 @@ export default function SkladPage() {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
   }
-
   function SortIcon({ col }: { col: string }) {
     if (sortCol !== col) return <ChevronUp size={12} className="text-gray-300" />
     return sortDir === 'asc' ? <ChevronUp size={12} className="text-sycom-500" /> : <ChevronDown size={12} className="text-sycom-500" />
   }
 
-  const selectedBuyItem = items.find(i => i.id === buyItem)
+  const selectedBuyItem = items.find(i => i.id === buyItemId)
   const buyTotal = (parseFloat(buyQty)||0) * (parseFloat(buyPrice)||0)
-  const selectedSellItem = items.find(i => i.id === sellItem)
+  const selectedSellItem = items.find(i => i.id === sellItemId)
   const sellTotal = (parseFloat(sellQty)||0) * (parseFloat(sellPrice)||0)
 
   async function handleBuy() {
-    if (!buyItem || !buyQty || !buyPrice) return
+    if (!buyItemName.trim() || !buyQty || !buyPrice) return
     setBuySubmitting(true)
     try {
+      // If new item, create it first
+      let stockItemId = buyItemId
+      if (!stockItemId || buyIsNew) {
+        const r = await fetch('/api/stock/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: buyItemName.trim(), vatRate: parseFloat(buyVat) }),
+        })
+        const newItem = await r.json()
+        if (!r.ok) throw new Error(newItem.error || 'Chyba pri vytvarani tovaru')
+        stockItemId = newItem.id
+      }
       const res = await fetch('/api/stock/movements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'BUY', stockItemId: buyItem,
-          quantity: parseFloat(buyQty), pricePerUnit: parseFloat(buyPrice),
+          type: 'BUY',
+          stockItemId,
+          quantity: parseFloat(buyQty),
+          pricePerUnit: parseFloat(buyPrice),
           vatRate: parseFloat(buyVat),
-          supplierId: buySupplier || null,
-          newSupplierName: !buySupplier && buySupplierSearch.trim() ? buySupplierSearch.trim() : null,
-          note: buyNote || null, date: buyDate,
+          supplierId: buySupplierId || null,
+          newSupplierName: !buySupplierId && buySupplierName.trim() ? buySupplierName.trim() : null,
+          note: buyNote || null,
+          date: buyDate,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Chyba')
       setModal(null)
-      setBuyItem(''); setBuyItemSearch(''); setBuyQty(''); setBuyPrice('')
-      setBuySupplier(''); setBuySupplierSearch(''); setBuyNote('')
+      setBuyItemId(''); setBuyItemName(''); setBuyIsNew(false)
+      setBuyQty(''); setBuyPrice(''); setBuyVat('20')
+      setBuySupplierId(''); setBuySupplierName(''); setBuyNote('')
       setBuyDate(new Date().toISOString().slice(0,10))
       load(); showStatus('success', 'Tovar bol pridany na sklad.')
     } catch (e: any) { showStatus('error', e.message) }
@@ -180,25 +258,28 @@ export default function SkladPage() {
   }
 
   async function handleSell() {
-    if (!sellItem || !sellQty || !sellPrice) return
+    if (!sellItemId || !sellQty || !sellPrice) return
     setSellSubmitting(true)
     try {
       const res = await fetch('/api/stock/movements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'SELL', stockItemId: sellItem,
-          quantity: parseFloat(sellQty), pricePerUnit: parseFloat(sellPrice),
+          type: 'SELL',
+          stockItemId: sellItemId,
+          quantity: parseFloat(sellQty),
+          pricePerUnit: parseFloat(sellPrice),
           vatRate: selectedSellItem?.vatRate ?? 20,
-          clientId: sellClient || null,
-          note: sellNote || null, date: sellDate,
+          clientId: sellClientId || null,
+          note: sellNote || null,
+          date: sellDate,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Chyba')
       setModal(null)
-      setSellItem(''); setSellItemSearch(''); setSellQty(''); setSellPrice('')
-      setSellClient(''); setSellClientSearch(''); setSellNote('')
+      setSellItemId(''); setSellItemName(''); setSellQty(''); setSellPrice('')
+      setSellClientId(''); setSellClientName(''); setSellNote('')
       setSellDate(new Date().toISOString().slice(0,10))
       load(); showStatus('success', 'Predaj bol zaznamenaný.')
     } catch (e: any) { showStatus('error', e.message) }
@@ -207,9 +288,19 @@ export default function SkladPage() {
 
   const lowStock = items.filter(i => i.minStock > 0 && i.currentStock <= i.minStock)
 
+  const itemSuggestions = items.map(i => ({
+    id: i.id,
+    name: i.name,
+    sub: i.currentStock + ' ' + i.unit + ' skladom',
+  }))
+  const supplierSuggestions = suppliers.map(s => ({ id: s.id, name: s.name }))
+  const clientSuggestions = clients.map(c => ({ id: c.id, name: c.name }))
+
   return (
     <PortalLayout>
-      <div className="max-w-7xl mx-auto py-8 px-6">
+      <div className="w-full max-w-7xl mx-auto py-8 px-6">
+
+        {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Sklad</h1>
@@ -227,12 +318,14 @@ export default function SkladPage() {
           </div>
         </div>
 
+        {/* Status */}
         {status && (
           <div className={'mb-4 flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm ' + (status.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800')}>
             {status.type === 'success' ? <Check size={16} /> : <X size={16} />} {status.msg}
           </div>
         )}
 
+        {/* Low stock warning */}
         {lowStock.length > 0 && (
           <div className="mb-4 flex items-start gap-2.5 px-4 py-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl text-sm">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -240,6 +333,7 @@ export default function SkladPage() {
           </div>
         )}
 
+        {/* Filters */}
         <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="relative sm:col-span-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -249,7 +343,9 @@ export default function SkladPage() {
           <select value={filterType} onChange={e => setFilterType(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
             <option value="">Vsetky typy</option>
-            {(Object.keys(MOVEMENT_LABELS) as MovementType[]).map(v => <option key={v} value={v}>{MOVEMENT_LABELS[v]}</option>)}
+            {(Object.keys(MOVEMENT_LABELS) as MovementType[]).map(v => (
+              <option key={v} value={v}>{MOVEMENT_LABELS[v]}</option>
+            ))}
           </select>
           <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
@@ -270,6 +366,7 @@ export default function SkladPage() {
           </div>
         </div>
 
+        {/* Movements table */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -297,7 +394,8 @@ export default function SkladPage() {
                       <span className={'text-[11px] font-bold px-2 py-0.5 rounded-full ' + MOVEMENT_COLORS[m.type]}>{MOVEMENT_LABELS[m.type]}</span>
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                      {m.stockItem.name}{m.stockItem.sku && <span className="ml-1 text-[10px] text-gray-400">({m.stockItem.sku})</span>}
+                      {m.stockItem.name}
+                      {m.stockItem.sku && <span className="ml-1 text-[10px] text-gray-400">({m.stockItem.sku})</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{m.quantity} {m.stockItem.unit}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{fmt(m.pricePerUnit)} EUR</td>
@@ -315,11 +413,14 @@ export default function SkladPage() {
           {filtered.length > 0 && (
             <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
               <span>{filtered.length} zaznamov</span>
-              <span className="font-semibold text-gray-600">Celkom: {fmt(filtered.reduce((s,m) => s + m.totalPrice, 0))} EUR bez DPH</span>
+              <span className="font-semibold text-gray-600">
+                Celkom: {fmt(filtered.reduce((s,m) => s + m.totalPrice, 0))} EUR bez DPH
+              </span>
             </div>
           )}
         </div>
 
+        {/* Stock overview */}
         <div className="mt-6 bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-base font-semibold text-gray-900">Stav skladu</h2>
@@ -359,49 +460,53 @@ export default function SkladPage() {
         </div>
       </div>
 
+      {/* BUY MODAL */}
       {modal === 'buy' && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <h2 className="text-base font-semibold text-gray-900">Prijem tovaru</h2>
               <button onClick={() => setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Tovar *</label>
-                <input type="text" value={buyItemSearch} onChange={e => { setBuyItemSearch(e.target.value); setBuyItem('') }}
-                  placeholder="Hladat tovar..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
-                {buyItemSearch && !buyItem && (
-                  <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-40 overflow-y-auto">
-                    {items.filter(i => i.name.toLowerCase().includes(buyItemSearch.toLowerCase())).map(i => (
-                      <button key={i.id} onClick={() => { setBuyItem(i.id); setBuyItemSearch(i.name); setBuyVat(String(i.vatRate)) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors">
-                        {i.name}{i.sku ? ' (' + i.sku + ')' : ''} <span className="text-gray-400">— {i.currentStock} {i.unit}</span>
-                      </button>
-                    ))}
-                    {items.filter(i => i.name.toLowerCase().includes(buyItemSearch.toLowerCase())).length === 0 && (
-                      <p className="px-3 py-2 text-sm text-gray-400">Tovar nenajdeny. Pridajte ho najprv.</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <Autocomplete
+                label="Nazov tovaru"
+                value={buyItemName}
+                onChange={v => { setBuyItemName(v); setBuyItemId(''); setBuyIsNew(false) }}
+                onSelect={(id, name) => { setBuyItemId(id); setBuyItemName(name); setBuyIsNew(false)
+                  const item = items.find(i => i.id === id)
+                  if (item) setBuyVat(String(item.vatRate))
+                }}
+                suggestions={itemSuggestions}
+                onNotFound={name => { setBuyItemName(name); setBuyItemId(''); setBuyIsNew(true) }}
+                notFoundLabel="Vytvorit novy tovar"
+                placeholder="Hladat alebo zadat novy tovar..."
+                required
+              />
+              {buyIsNew && (
+                <p className="text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-xl">
+                  Novy tovar &quot;{buyItemName}&quot; bude vytvoreny automaticky.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Mnozstvo *</label>
-                  <input type="number" min="0.01" step="0.01" value={buyQty} onChange={e => setBuyQty(e.target.value)}
+                  <input type="number" min="0.01" step="0.01" value={buyQty}
+                    onChange={e => setBuyQty(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Cena/ks bez DPH (EUR) *</label>
-                  <input type="number" min="0" step="0.01" value={buyPrice} onChange={e => setBuyPrice(e.target.value)}
+                  <input type="number" min="0" step="0.01" value={buyPrice}
+                    onChange={e => setBuyPrice(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">DPH (%)</label>
-                  <input type="number" min="0" max="100" step="1" value={buyVat} onChange={e => setBuyVat(e.target.value)}
+                  <input type="number" min="0" max="100" step="1" value={buyVat}
+                    onChange={e => setBuyVat(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
                 </div>
                 <div className="flex flex-col justify-end">
@@ -409,23 +514,16 @@ export default function SkladPage() {
                   <p className="text-lg font-bold text-gray-900">{fmt(buyTotal)} EUR</p>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Dodavatel</label>
-                <input type="text" value={buySupplierSearch} onChange={e => { setBuySupplierSearch(e.target.value); setBuySupplier('') }}
-                  placeholder="Hladat alebo zadat noveho dodavatela..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
-                {buySupplierSearch && !buySupplier && (
-                  <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-32 overflow-y-auto">
-                    {suppliers.filter(s => s.name.toLowerCase().includes(buySupplierSearch.toLowerCase())).map(s => (
-                      <button key={s.id} onClick={() => { setBuySupplier(s.id); setBuySupplierSearch(s.name) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors">{s.name}</button>
-                    ))}
-                    {suppliers.filter(s => s.name.toLowerCase().includes(buySupplierSearch.toLowerCase())).length === 0 && (
-                      <p className="px-3 py-2 text-sm text-green-600 font-medium">Novy dodavatel bude vytvoreny</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <Autocomplete
+                label="Dodavatel"
+                value={buySupplierName}
+                onChange={v => { setBuySupplierName(v); setBuySupplierId('') }}
+                onSelect={(id, name) => { setBuySupplierId(id); setBuySupplierName(name) }}
+                suggestions={supplierSuggestions}
+                onNotFound={name => { setBuySupplierName(name); setBuySupplierId('') }}
+                notFoundLabel="Pridat noveho dodavatela"
+                placeholder="Hladat alebo zadat noveho dodavatela..."
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Datum nakupu</label>
@@ -439,9 +537,13 @@ export default function SkladPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button>
-              <button onClick={handleBuy} disabled={buySubmitting || !buyItem || !buyQty || !buyPrice}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white">
+              <button onClick={() => setModal(null)}
+                className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">
+                Zrusit
+              </button>
+              <button onClick={handleBuy}
+                disabled={buySubmitting || !buyItemName.trim() || !buyQty || !buyPrice}
                 className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
                 <Plus size={15} /> {buySubmitting ? 'Ukladam...' : 'Pridat na sklad'}
               </button>
@@ -450,64 +552,58 @@ export default function SkladPage() {
         </div>
       )}
 
+      {/* SELL MODAL */}
       {modal === 'sell' && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <h2 className="text-base font-semibold text-gray-900">Predaj tovaru</h2>
               <button onClick={() => setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Tovar *</label>
-                <input type="text" value={sellItemSearch} onChange={e => { setSellItemSearch(e.target.value); setSellItem(''); setSellPrice('') }}
-                  placeholder="Hladat tovar na sklade..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
-                {sellItemSearch && !sellItem && (
-                  <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-40 overflow-y-auto">
-                    {items.filter(i => i.name.toLowerCase().includes(sellItemSearch.toLowerCase()) && i.currentStock > 0).map(i => (
-                      <button key={i.id} onClick={() => { setSellItem(i.id); setSellItemSearch(i.name) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors">
-                        {i.name} <span className="text-gray-400">— {i.currentStock} {i.unit} na sklade</span>
-                      </button>
-                    ))}
-                    {items.filter(i => i.name.toLowerCase().includes(sellItemSearch.toLowerCase()) && i.currentStock > 0).length === 0 && (
-                      <p className="px-3 py-2 text-sm text-red-500">Tovar nie je na sklade.</p>
-                    )}
-                  </div>
-                )}
-                {selectedSellItem && <p className="mt-1 text-xs text-gray-400">Skladom: <strong>{selectedSellItem.currentStock} {selectedSellItem.unit}</strong></p>}
-              </div>
+              <Autocomplete
+                label="Tovar"
+                value={sellItemName}
+                onChange={v => { setSellItemName(v); setSellItemId(''); setSellPrice('') }}
+                onSelect={(id, name) => { setSellItemId(id); setSellItemName(name) }}
+                suggestions={itemSuggestions.filter(i => {
+                  const item = items.find(x => x.id === i.id)
+                  return (item?.currentStock ?? 0) > 0
+                })}
+                placeholder="Hladat tovar na sklade..."
+                required
+              />
+              {selectedSellItem && (
+                <p className="text-xs text-gray-400">
+                  Skladom: <strong>{selectedSellItem.currentStock} {selectedSellItem.unit}</strong>
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Mnozstvo *</label>
-                  <input type="number" min="0.01" step="0.01" value={sellQty} onChange={e => setSellQty(e.target.value)}
+                  <input type="number" min="0.01" step="0.01" value={sellQty}
+                    onChange={e => setSellQty(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Predajna cena/ks bez DPH (EUR) *</label>
-                  <input type="number" min="0" step="0.01" value={sellPrice} onChange={e => setSellPrice(e.target.value)}
+                  <input type="number" min="0" step="0.01" value={sellPrice}
+                    onChange={e => setSellPrice(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-400">Spolu bez DPH</p>
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                <p className="text-xs text-gray-500 font-medium">Spolu bez DPH</p>
                 <p className="text-lg font-bold text-gray-900">{fmt(sellTotal)} EUR</p>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Zakaznik</label>
-                <input type="text" value={sellClientSearch} onChange={e => { setSellClientSearch(e.target.value); setSellClient('') }}
-                  placeholder="Hladat zakaznika..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
-                {sellClientSearch && !sellClient && (
-                  <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-32 overflow-y-auto">
-                    {clients.filter(c => c.name.toLowerCase().includes(sellClientSearch.toLowerCase())).map(c => (
-                      <button key={c.id} onClick={() => { setSellClient(c.id); setSellClientSearch(c.name) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors">{c.name}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Autocomplete
+                label="Zakaznik"
+                value={sellClientName}
+                onChange={v => { setSellClientName(v); setSellClientId('') }}
+                onSelect={(id, name) => { setSellClientId(id); setSellClientName(name) }}
+                suggestions={clientSuggestions}
+                placeholder="Hladat zakaznika..."
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Datum predaja</label>
@@ -521,9 +617,13 @@ export default function SkladPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button>
-              <button onClick={handleSell} disabled={sellSubmitting || !sellItem || !sellQty || !sellPrice}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white">
+              <button onClick={() => setModal(null)}
+                className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">
+                Zrusit
+              </button>
+              <button onClick={handleSell}
+                disabled={sellSubmitting || !sellItemId || !sellQty || !sellPrice}
                 className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
                 <ShoppingCart size={15} /> {sellSubmitting ? 'Ukladam...' : 'Zapisat predaj'}
               </button>
