@@ -42,37 +42,56 @@ enum TicketCategory {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  tickets   Ticket[]
-
+  id            String          @id @default(cuid())
+  name          String          @unique
+  contactPerson String?
+  phone         String?
+  ico           String?
+  dic           String?
+  dicDph        String?
+  address       String?
+  www           String?
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  users         User[]
+  tickets       Ticket[]
+  pricing       ClientPricing[]
   @@map("clients")
 }
 
+model ClientPricing {
+  id           String   @id @default(cuid())
+  clientId     String
+  hoursType    String
+  pricePerHour Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  @@unique([clientId, hoursType])
+  @@map("client_pricing")
+}
+
 model User {
-  id              String       @id @default(cuid())
+  id              String         @id @default(cuid())
   name            String
-  email           String       @unique
+  email           String         @unique
   password        String
-  role            Role         @default(CLIENT)
+  role            Role           @default(CLIENT)
   department      String?
   phone           String?
   avatar          String?
-  isActive        Boolean      @default(true)
+  isActive        Boolean        @default(true)
   clientId        String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ticketsCreated  Ticket[]     @relation("TicketCreator")
-  ticketsAssigned Ticket[]     @relation("TicketAssignee")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  client          Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ticketsCreated  Ticket[]       @relation("TicketCreator")
+  ticketsAssigned Ticket[]       @relation("TicketAssignee")
   comments        Comment[]
   teamMemberships TeamMember[]
   notifications   Notification[]
   sessions        Session[]
-
   @@map("users")
 }
 
@@ -82,7 +101,6 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@map("sessions")
 }
 
@@ -95,7 +113,6 @@ model Team {
   updatedAt   DateTime     @updatedAt
   members     TeamMember[]
   tickets     Ticket[]
-
   @@map("teams")
 }
 
@@ -107,52 +124,48 @@ model TeamMember {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
   @@unique([userId, teamId])
   @@map("team_members")
 }
 
 model Ticket {
-  id           String         @id @default(cuid())
-  ticketNumber Int            @unique @default(autoincrement())
-  subject      String
-  description  String         @db.Text
-  status       TicketStatus   @default(OPEN)
-  priority     TicketPriority @default(MEDIUM)
-  category     TicketCategory @default(OTHER)
-  department   String?
-  slaDeadline  DateTime?
-  resolvedAt   DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  creatorId    String
-  assigneeId   String?
-  teamId       String?
-  // Direct client relationship on the ticket — independent of who created it
-  clientId     String?
-  creator      User           @relation("TicketCreator",  fields: [creatorId],  references: [id])
-  assignee     User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  team         Team?          @relation(fields: [teamId],  references: [id])
-  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  comments     Comment[]
-  attachments  Attachment[]
+  id            String         @id @default(cuid())
+  ticketNumber  Int            @unique @default(autoincrement())
+  subject       String
+  description   String         @db.Text
+  status        TicketStatus   @default(OPEN)
+  priority      TicketPriority @default(MEDIUM)
+  category      TicketCategory @default(OTHER)
+  department    String?
+  slaDeadline   DateTime?
+  resolvedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  creatorId     String
+  assigneeId    String?
+  teamId        String?
+  clientId      String?
+  creator       User           @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignee      User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  team          Team?          @relation(fields: [teamId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  comments      Comment[]
+  attachments   Attachment[]
   notifications Notification[]
-
   @@map("tickets")
 }
 
 model Comment {
-  id           String   @id @default(cuid())
-  body         String   @db.Text
-  isInternal   Boolean  @default(false)
-  workedHours  Float    @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  ticketId     String
-  authorId     String
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author       User     @relation(fields: [authorId], references: [id])
-
+  id          String   @id @default(cuid())
+  body        String   @db.Text
+  isInternal  Boolean  @default(false)
+  workedHours Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ticketId    String
+  authorId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User     @relation(fields: [authorId], references: [id])
   @@map("comments")
 }
 
@@ -165,7 +178,6 @@ model Attachment {
   createdAt DateTime @default(now())
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-
   @@map("attachments")
 }
 
@@ -179,7 +191,6 @@ model Notification {
   ticketId  String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ticket    Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-
   @@map("notifications")
 }
 
@@ -193,6 +204,5 @@ model KbArticle {
   isPublished Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   @@map("kb_articles")
 }
