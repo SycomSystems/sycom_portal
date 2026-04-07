@@ -18,12 +18,13 @@ const navItems: NavItem[] = [
   { href: '/dashboard',     label: 'Dashboard',      icon: <LayoutDashboard size={16} /> },
   { href: '/tickets',       label: 'Tikety',         icon: <Ticket size={16} /> },
   { href: '/tickets/new',   label: 'Nový tiket',     icon: <Plus size={16} /> },
-  { href: '/kb',            label: 'Znalostná báza', icon: <BookOpen size={16} /> },
-  { href: '/admin/users',   label: 'Používatelia',   icon: <Users size={16} />,    roles: ['ADMIN'] },
+  // KB only for staff
+  { href: '/kb',            label: 'Znalostná báza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/users',   label: 'Používatelia',   icon: <Users size={16} />,     roles: ['ADMIN'] },
   { href: '/admin/clients', label: 'Klienti',        icon: <Building2 size={16} />, roles: ['ADMIN'] },
-  { href: '/admin/teams',   label: 'Tímy',           icon: <Users size={16} />,    roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/teams',   label: 'Tímy',           icon: <Users size={16} />,     roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports', label: 'Reporty',        icon: <BarChart2 size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/settings',      label: 'Nastavenia',     icon: <Settings size={16} />, roles: ['ADMIN'] },
+  { href: '/settings',      label: 'Nastavenia',     icon: <Settings size={16} />,  roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {
@@ -34,7 +35,6 @@ export function Sidebar() {
   const [helpdeskPhone, setHelpdeskPhone] = useState('0948 938 217')
   const [ticketBadge,   setTicketBadge]   = useState(0)
 
-  // Fetch helpdesk phone
   useEffect(() => {
     fetch('/api/settings/phone')
       .then(r => r.json())
@@ -42,17 +42,14 @@ export function Sidebar() {
       .catch(() => {})
   }, [])
 
-  // Fetch unresolved assigned tickets badge — staff only, refresh every 30s
   useEffect(() => {
     if (role !== 'ADMIN' && role !== 'AGENT') return
-
     const fetchBadge = () => {
       fetch('/api/tickets/badge')
         .then(r => r.json())
         .then(d => setTicketBadge(d.count ?? 0))
         .catch(() => {})
     }
-
     fetchBadge()
     const interval = setInterval(fetchBadge, 30000)
     return () => clearInterval(interval)
@@ -64,18 +61,16 @@ export function Sidebar() {
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-gray-100">
-      {/* Logo area */}
       <div className="h-16 flex items-center px-5 border-b border-gray-100">
         <span className="text-lg font-bold text-sycom-600">Sycom</span>
         <span className="text-lg font-bold text-gray-400">Portal</span>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-          const isTickets = item.href === '/tickets'
-          const showBadge = isTickets && ticketBadge > 0
+          const isActive   = pathname === item.href || pathname.startsWith(item.href + '/')
+          const isTickets  = item.href === '/tickets'
+          const showBadge  = isTickets && ticketBadge > 0
 
           return (
             <Link key={item.href} href={item.href}
@@ -101,7 +96,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Helpdesk phone */}
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-2 px-3 py-2.5 bg-sycom-50 rounded-xl">
           <Phone size={14} className="text-sycom-500 shrink-0" />
