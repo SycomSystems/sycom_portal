@@ -41,6 +41,15 @@ enum TicketCategory {
   OTHER
 }
 
+enum StockMovementType {
+  BUY
+  SELL
+  RETURN_FROM_CUSTOMER
+  RETURN_TO_SUPPLIER
+  WRITEOFF
+  CORRECTION
+}
+
 model Client {
   id            String          @id @default(cuid())
   name          String          @unique
@@ -57,6 +66,7 @@ model Client {
   users         User[]
   tickets       Ticket[]
   pricing       ClientPricing[]
+  stockMovements StockMovement[]
   @@map("clients")
 }
 
@@ -72,26 +82,77 @@ model ClientPricing {
   @@map("client_pricing")
 }
 
+model Supplier {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  note          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  stockMovements StockMovement[]
+  @@map("suppliers")
+}
+
+model StockItem {
+  id           String          @id @default(cuid())
+  name         String
+  sku          String?         @unique
+  category     String?
+  unit         String          @default("ks")
+  vatRate      Float           @default(20)
+  minStock     Int             @default(0)
+  currentStock Float           @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  movements    StockMovement[]
+  @@map("stock_items")
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  type         StockMovementType
+  stockItemId  String
+  quantity     Float
+  pricePerUnit Float             @default(0)
+  totalPrice   Float             @default(0)
+  vatRate      Float             @default(20)
+  supplierId   String?
+  clientId     String?
+  addedById    String
+  note         String?
+  date         DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  stockItem    StockItem         @relation(fields: [stockItemId], references: [id])
+  supplier     Supplier?         @relation(fields: [supplierId], references: [id])
+  client       Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  addedBy      User              @relation(fields: [addedById], references: [id])
+  @@map("stock_movements")
+}
+
 model User {
-  id              String         @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
-  email           String         @unique
+  email           String          @unique
   password        String
-  role            Role           @default(CLIENT)
+  role            Role            @default(CLIENT)
   department      String?
   phone           String?
   avatar          String?
-  isActive        Boolean        @default(true)
+  isActive        Boolean         @default(true)
   clientId        String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  client          Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ticketsCreated  Ticket[]       @relation("TicketCreator")
-  ticketsAssigned Ticket[]       @relation("TicketAssignee")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  client          Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ticketsCreated  Ticket[]        @relation("TicketCreator")
+  ticketsAssigned Ticket[]        @relation("TicketAssignee")
   comments        Comment[]
   teamMemberships TeamMember[]
   notifications   Notification[]
   sessions        Session[]
+  stockMovements  StockMovement[]
   @@map("users")
 }
 
