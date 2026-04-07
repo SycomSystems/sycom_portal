@@ -17,17 +17,21 @@ export default withAuth(
     if (pathname.startsWith('/admin/reports') && role === 'CLIENT') {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
+
     if (pathname.startsWith('/admin/reports') && role === 'CLIENT_MANAGER') {
       return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // Knowledge base — staff only (ADMIN and AGENT)
+    if (pathname.startsWith('/kb') && role !== 'ADMIN' && role !== 'AGENT') {
+      return NextResponse.redirect(new URL('/tickets', req.url))
     }
 
     return NextResponse.next()
   },
   {
     callbacks: {
-      authorized({ token }) {
-        return !!token
-      },
+      authorized: ({ token }) => !!token,
     },
   }
 )
@@ -36,15 +40,16 @@ export const config = {
   matcher: [
     '/dashboard/:path*',
     '/tickets/:path*',
-    '/admin/:path*',
     '/kb/:path*',
+    '/admin/:path*',
     '/settings/:path*',
     '/api/tickets/:path*',
     '/api/users/:path*',
-    '/api/teams/:path*',
-    '/api/kb/:path*',
     '/api/reports/:path*',
+    '/api/kb/:path*',
     '/api/clients/:path*',
+    '/api/teams/:path*',
+    '/api/comments/:path*',
     '/api/settings/:path*',
   ],
 }
