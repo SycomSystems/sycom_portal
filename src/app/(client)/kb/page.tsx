@@ -28,7 +28,7 @@ export default function KbPage() {
 
   const { data: articles=[], isLoading } = useQuery({
     queryKey: ['kb-published'],
-    queryFn: () => fetch('/api/kb').then(r=>r.json()),
+    queryFn: () => fetch('/api/kb').then(r=>r.json()).then(d=>Array.isArray(d)?d:[]),
     enabled: isStaff,
   })
 
