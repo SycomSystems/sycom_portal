@@ -15,9 +15,8 @@ const navItems: NavItem[] = [
   { href: '/kb', label: 'Znalostna baza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/users', label: 'Pouzivatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
   { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
-  { href: '/admin/teams', label: 'Timy', icon: <Users size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
 ]
 
@@ -51,11 +50,9 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
           const isActive = pathname === item.href || (item.href !== '/admin/reports' && pathname.startsWith(item.href + '/'))
-          const isReports = item.href === '/admin/reports'
-          const isReportsActive = isReports && pathname.startsWith('/admin/reports')
+          const isReportsActive = item.href === '/admin/reports' && pathname.startsWith('/admin/reports')
           const active = isActive || isReportsActive
-          const isTickets = item.href === '/tickets'
-          const showBadge = isTickets && ticketBadge > 0
+          const showBadge = item.href === '/tickets' && ticketBadge > 0
           return (
             <Link key={item.href} href={item.href}
               className={cn('flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all', active ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
