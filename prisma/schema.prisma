@@ -8,30 +8,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { ADMIN AGENT CLIENT CLIENT_MANAGER }
-enum TicketStatus { OPEN IN_PROGRESS WAITING RESOLVED CLOSED }
-enum TicketPriority { LOW MEDIUM HIGH CRITICAL }
-enum TicketCategory { HARDWARE SOFTWARE NETWORK EMAIL SECURITY CLOUD ONBOARDING OTHER }
-enum StockMovementType { BUY SELL RETURN_FROM_CUSTOMER RETURN_TO_SUPPLIER WRITEOFF CORRECTION }
+enum Role {
+  ADMIN
+  AGENT
+  CLIENT
+  CLIENT_MANAGER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  NETWORK
+  EMAIL
+  SECURITY
+  CLOUD
+  ONBOARDING
+  OTHER
+}
+
+enum StockMovementType {
+  BUY
+  SELL
+  RETURN_FROM_CUSTOMER
+  RETURN_TO_SUPPLIER
+  WRITEOFF
+  CORRECTION
+}
 
 model Client {
-  id            String    @id @default(cuid())
-  name          String    @unique
-  contactPerson String?
-  phone         String?
-  ico           String?
-  dic           String?
-  dicDph        String?
-  address       String?
-  www           String?
-  notes         String?   @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  users         User[]
-  tickets       Ticket[]
-  pricing       ClientPricing[]
+  id             String          @id @default(cuid())
+  name           String          @unique
+  contactPerson  String?
+  phone          String?
+  ico            String?
+  dic            String?
+  dicDph         String?
+  address        String?
+  www            String?
+  notes          String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  users          User[]
+  tickets        Ticket[]
+  pricing        ClientPricing[]
   stockMovements StockMovement[]
-  manualHours   ManualHours[]
+  manualHours    ManualHours[]
   @@map("clients")
 }
 
@@ -48,52 +84,52 @@ model ClientPricing {
 }
 
 model Supplier {
-  id            String   @id @default(cuid())
-  name          String   @unique
-  contactPerson String?
-  phone         String?
-  email         String?
-  address       String?
-  note          String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String          @id @default(cuid())
+  name           String          @unique
+  contactPerson  String?
+  phone          String?
+  email          String?
+  address        String?
+  note           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   stockMovements StockMovement[]
   @@map("suppliers")
 }
 
 model StockItem {
-  id           String   @id @default(cuid())
+  id           String          @id @default(cuid())
   name         String
-  sku          String?  @unique
+  sku          String?         @unique
   category     String?
-  unit         String   @default("ks")
-  vatRate      Float    @default(20)
-  minStock     Int      @default(0)
-  currentStock Float    @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  unit         String          @default("ks")
+  vatRate      Float           @default(20)
+  minStock     Int             @default(0)
+  currentStock Float           @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   movements    StockMovement[]
   @@map("stock_items")
 }
 
 model StockMovement {
-  id          String            @id @default(cuid())
-  type        StockMovementType
-  stockItemId String
-  quantity    Float
-  pricePerUnit Float            @default(0)
-  totalPrice  Float             @default(0)
-  vatRate     Float             @default(20)
-  supplierId  String?
-  clientId    String?
-  addedById   String
-  note        String?
-  date        DateTime          @default(now())
-  createdAt   DateTime          @default(now())
-  stockItem   StockItem         @relation(fields: [stockItemId], references: [id])
-  supplier    Supplier?         @relation(fields: [supplierId], references: [id])
-  client      Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  addedBy     User              @relation(fields: [addedById], references: [id])
+  id           String            @id @default(cuid())
+  type         StockMovementType
+  stockItemId  String
+  quantity     Float
+  pricePerUnit Float             @default(0)
+  totalPrice   Float             @default(0)
+  vatRate      Float             @default(20)
+  supplierId   String?
+  clientId     String?
+  addedById    String
+  note         String?
+  date         DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  stockItem    StockItem         @relation(fields: [stockItemId], references: [id])
+  supplier     Supplier?         @relation(fields: [supplierId], references: [id])
+  client       Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  addedBy      User              @relation(fields: [addedById], references: [id])
   @@map("stock_movements")
 }
 
@@ -113,27 +149,27 @@ model ManualHours {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  name           String
-  email          String    @unique
-  password       String
-  role           Role      @default(CLIENT)
-  department     String?
-  phone          String?
-  avatar         String?
-  isActive       Boolean   @default(true)
-  clientId       String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ticketsCreated Ticket[]  @relation("TicketCreator")
-  ticketsAssigned Ticket[] @relation("TicketAssignee")
-  comments       Comment[]
+  id              String       @id @default(cuid())
+  name            String
+  email           String       @unique
+  password        String
+  role            Role         @default(CLIENT)
+  department      String?
+  phone           String?
+  avatar          String?
+  isActive        Boolean      @default(true)
+  clientId        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ticketsCreated  Ticket[]     @relation("TicketCreator")
+  ticketsAssigned Ticket[]     @relation("TicketAssignee")
+  comments        Comment[]
   teamMemberships TeamMember[]
-  notifications  Notification[]
-  sessions       Session[]
-  stockMovements StockMovement[]
-  manualHours    ManualHours[]
+  notifications   Notification[]
+  sessions        Session[]
+  stockMovements  StockMovement[]
+  manualHours     ManualHours[]
   @@map("users")
 }
 
@@ -147,12 +183,12 @@ model Session {
 }
 
 model Team {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String       @id @default(cuid())
+  name        String       @unique
   description String?
-  color       String   @default("#1a6fba")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  color       String       @default("#1a6fba")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   members     TeamMember[]
   tickets     Ticket[]
   @@map("teams")
@@ -171,28 +207,28 @@ model TeamMember {
 }
 
 model Ticket {
-  id           String         @id @default(cuid())
-  ticketNumber Int            @unique @default(autoincrement())
-  subject      String
-  description  String         @db.Text
-  status       TicketStatus   @default(OPEN)
-  priority     TicketPriority @default(MEDIUM)
-  category     TicketCategory @default(OTHER)
-  department   String?
-  slaDeadline  DateTime?
-  resolvedAt   DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  creatorId    String
-  assigneeId   String?
-  teamId       String?
-  clientId     String?
-  creator      User           @relation("TicketCreator", fields: [creatorId], references: [id])
-  assignee     User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  team         Team?          @relation(fields: [teamId], references: [id])
-  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  comments     Comment[]
-  attachments  Attachment[]
+  id            String         @id @default(cuid())
+  ticketNumber  Int            @unique @default(autoincrement())
+  subject       String
+  description   String         @db.Text
+  status        TicketStatus   @default(OPEN)
+  priority      TicketPriority @default(MEDIUM)
+  category      TicketCategory @default(OTHER)
+  department    String?
+  slaDeadline   DateTime?
+  resolvedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  creatorId     String
+  assigneeId    String?
+  teamId        String?
+  clientId      String?
+  creator       User           @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignee      User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  team          Team?          @relation(fields: [teamId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  comments      Comment[]
+  attachments   Attachment[]
   notifications Notification[]
   @@map("tickets")
 }
