@@ -1,27 +1,23 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, Clock } from 'lucide-react'
 
-interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
-
-const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-  { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} /> },
-  { href: '/tickets/new', label: 'Novy tiket', icon: <Plus size={16} /> },
-  { href: '/kb', label: 'Znalostna baza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/users', label: 'Pouzivatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
-  { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
-  { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
-  { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
-]
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ReactNode
+  roles?: string[]
+  action?: () => void
+  isButton?: boolean
+}
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role ?? 'CLIENT'
   const [helpdeskPhone, setHelpdeskPhone] = useState('0948 938 217')
@@ -39,6 +35,19 @@ export function Sidebar() {
     return () => clearInterval(interval)
   }, [role])
 
+  const navItems: NavItem[] = [
+    { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+    { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} /> },
+    { href: '/tickets/new', label: 'Novy tiket', icon: <Plus size={16} /> },
+    { href: '/admin/reports/vykaz?addHours=1', label: '+ Vykaz Prace', icon: <Clock size={16} />, roles: ['ADMIN', 'AGENT'], isButton: true },
+    { href: '/kb', label: 'Znalostna baza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
+    { href: '/admin/users', label: 'Pouzivatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
+    { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
+    { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
+    { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
+    { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
+  ]
+
   const visibleItems = navItems.filter(item => !item.roles || item.roles.includes(role))
 
   return (
@@ -49,18 +58,34 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
-          const isActive = pathname === item.href || (item.href !== '/admin/reports' && pathname.startsWith(item.href + '/'))
+          const isActive = !item.isButton && (pathname === item.href || (item.href !== '/admin/reports' && pathname.startsWith(item.href.split('?')[0] + '/')))
           const isReportsActive = item.href === '/admin/reports' && pathname.startsWith('/admin/reports')
           const active = isActive || isReportsActive
           const showBadge = item.href === '/tickets' && ticketBadge > 0
+
+          if (item.isButton) {
+            return (
+              <Link key={item.href} href={item.href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-green-700 bg-green-50 hover:bg-green-100 border border-green-200">
+                <span className="shrink-0 text-green-600">{item.icon}</span>
+                {item.label}
+              </Link>
+            )
+          }
+
           return (
             <Link key={item.href} href={item.href}
-              className={cn('flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all', active ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
+              className={cn('flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                active ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
               <span className="flex items-center gap-3">
                 <span className={cn('shrink-0', active ? 'text-sycom-500' : 'text-gray-400')}>{item.icon}</span>
                 {item.label}
               </span>
-              {showBadge && (<span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full">{ticketBadge > 99 ? '99+' : ticketBadge}</span>)}
+              {showBadge && (
+                <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full">
+                  {ticketBadge > 99 ? '99+' : ticketBadge}
+                </span>
+              )}
             </Link>
           )
         })}
