@@ -13,7 +13,6 @@ const updateSchema = z.object({
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']).optional(),
   assigneeId:  z.string().optional().nullable(),
   teamId:      z.string().optional().nullable(),
-  // clientId: admin can reassign the ticket's client by updating the creator's clientId
   clientId:    z.string().optional().nullable(),
   comment:     z.string().optional(),
   isInternal:  z.boolean().optional(),
@@ -27,7 +26,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const ticket = await prisma.ticket.findUnique({
     where: { id: params.id },
     include: {
-      creator:  { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
+      creator:  { select: { id: true, name: true, email: true } },
+      client:   { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
       team:     { select: { id: true, name: true } },
       comments: {
@@ -48,9 +48,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   if (role === 'CLIENT_MANAGER') {
-    const me      = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
-    const creator = await prisma.user.findUnique({ where: { id: ticket.creatorId }, select: { clientId: true } })
-    if (!me?.clientId || me.clientId !== creator?.clientId) {
+    const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
+    if (!me?.clientId || me.clientId !== ticket.clientId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
@@ -71,22 +70,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const { status, subject, description, priority, category, assigneeId, teamId, clientId, comment, isInternal, workedHours } = parsed.data
-  const userId   = (session.user as any).id
-  const role     = (session.user as any).role
-  const isAdmin  = role === 'ADMIN'
-  const isStaff  = role === 'ADMIN' || role === 'AGENT'
+  const userId  = (session.user as any).id
+  const role    = (session.user as any).role
+  const isAdmin = role === 'ADMIN'
+  const isStaff = role === 'ADMIN' || role === 'AGENT'
 
   const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Admin can reassign which client this ticket belongs to
-  // Done by updating the creator's clientId (client lives on the user, not the ticket)
-  if (isAdmin && clientId !== undefined) {
-    await prisma.user.update({
-      where: { id: ticket.creatorId },
-      data:  { clientId: clientId ?? null },
-    })
-  }
 
   const isResolving = status === 'RESOLVED' && ticket.status !== 'RESOLVED'
   const commentBody = comment?.trim() || (isResolving && isStaff && workedHours ? 'Tiket vyriešený' : null)
@@ -109,18 +99,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (teamId     !== undefined) updates.teamId     = teamId
   if (isResolving)              updates.resolvedAt = new Date()
 
+  // Admin-only editable fields
   if (isAdmin) {
-    if (subject)     updates.subject     = subject
-    if (description) updates.description = description
-    if (priority)    updates.priority    = priority
-    if (category)    updates.category    = category
+    if (subject)               updates.subject     = subject
+    if (description)           updates.description = description
+    if (priority)              updates.priority    = priority
+    if (category)              updates.category    = category
+    // clientId stored directly on ticket — only affects THIS ticket
+    if (clientId !== undefined) updates.clientId   = clientId ?? null
   }
 
   const updated = await prisma.ticket.update({
     where: { id: params.id },
     data: updates,
     include: {
-      creator:  { select: { id: true, name: true, email: true, client: { select: { id: true, name: true } } } },
+      creator:  { select: { id: true, name: true, email: true } },
+      client:   { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true, email: true } },
       team:     { select: { id: true, name: true } },
     },
