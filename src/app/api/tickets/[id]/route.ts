@@ -6,17 +6,15 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const updateSchema = z.object({
-  // Status / workflow
   status:      z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']).optional(),
-  // Admin-editable fields
   subject:     z.string().min(5).max(200).optional(),
   description: z.string().min(10).optional(),
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']).optional(),
   assigneeId:  z.string().optional().nullable(),
   teamId:      z.string().optional().nullable(),
+  // clientId: admin can reassign the ticket's client by updating the creator's clientId
   clientId:    z.string().optional().nullable(),
-  // Comment / time tracking
   comment:     z.string().optional(),
   isInternal:  z.boolean().optional(),
   workedHours: z.number().min(0).max(24).optional(),
@@ -77,41 +75,45 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const role     = (session.user as any).role
   const isAdmin  = role === 'ADMIN'
   const isStaff  = role === 'ADMIN' || role === 'AGENT'
-  const canLogTime = isStaff
 
   const ticket = await prisma.ticket.findUnique({ where: { id: params.id } })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Create comment if provided
+  // Admin can reassign which client this ticket belongs to
+  // Done by updating the creator's clientId (client lives on the user, not the ticket)
+  if (isAdmin && clientId !== undefined) {
+    await prisma.user.update({
+      where: { id: ticket.creatorId },
+      data:  { clientId: clientId ?? null },
+    })
+  }
+
   const isResolving = status === 'RESOLVED' && ticket.status !== 'RESOLVED'
-  const commentBody = comment?.trim() || (isResolving && canLogTime && workedHours ? 'Tiket vyriešený' : null)
+  const commentBody = comment?.trim() || (isResolving && isStaff && workedHours ? 'Tiket vyriešený' : null)
 
   if (commentBody) {
     await prisma.comment.create({
       data: {
         body:        commentBody,
         isInternal:  isInternal ?? false,
-        workedHours: canLogTime ? (workedHours ?? 0) : 0,
+        workedHours: isStaff ? (workedHours ?? 0) : 0,
         ticketId:    ticket.id,
         authorId:    userId,
       },
     })
   }
 
-  // Build update object
   const updates: any = {}
   if (status)                   updates.status     = status
-  if (priority)                 updates.priority   = priority
   if (assigneeId !== undefined) updates.assigneeId = assigneeId
   if (teamId     !== undefined) updates.teamId     = teamId
   if (isResolving)              updates.resolvedAt = new Date()
 
-  // Admin-only field edits
   if (isAdmin) {
-    if (subject)               updates.subject     = subject
-    if (description)           updates.description = description
-    if (category)              updates.category    = category
-    if (clientId !== undefined) updates.clientId   = clientId
+    if (subject)     updates.subject     = subject
+    if (description) updates.description = description
+    if (priority)    updates.priority    = priority
+    if (category)    updates.category    = category
   }
 
   const updated = await prisma.ticket.update({
