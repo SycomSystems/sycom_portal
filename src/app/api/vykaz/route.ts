@@ -25,9 +25,9 @@ export async function GET(req: NextRequest) {
   const dateTo = to ? new Date(to) : new Date()
   dateTo.setHours(23, 59, 59, 999)
 
+  // 1. Ticket comments with worked hours
   const commentWhere: any = { workedHours: { gt: 0 }, createdAt: { gte: dateFrom, lte: dateTo } }
   if (clientId) commentWhere.ticket = { clientId }
-
   const comments = await prisma.comment.findMany({
     where: commentWhere,
     include: {
@@ -37,35 +37,46 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'asc' },
   })
 
+  // 2. Manual hours entries
+  const manualWhere: any = { date: { gte: dateFrom, lte: dateTo } }
+  if (clientId) manualWhere.clientId = clientId
+  const manualHours = await prisma.manualHours.findMany({
+    where: manualWhere,
+    include: {
+      user: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true } },
+    },
+    orderBy: { date: 'asc' },
+  })
+
+  // 3. Stock SELL movements
   const movementWhere: any = { type: 'SELL', date: { gte: dateFrom, lte: dateTo } }
   if (clientId) movementWhere.clientId = clientId
-
   const movements = await prisma.stockMovement.findMany({
     where: movementWhere,
     include: { stockItem: true, addedBy: { select: { id: true, name: true } }, client: { select: { id: true, name: true } } },
     orderBy: { date: 'asc' },
   })
 
-  let clientPricing: any[] = clientId
+  // 4. Client pricing map
+  const clientPricing = clientId
     ? await prisma.clientPricing.findMany({ where: { clientId } })
     : await prisma.clientPricing.findMany()
-
   const pricingMap: Record<string, Record<string, number>> = {}
   for (const p of clientPricing) {
     if (!pricingMap[p.clientId]) pricingMap[p.clientId] = {}
     pricingMap[p.clientId][p.hoursType] = p.pricePerHour
   }
 
-  const hourRows = comments.map(c => {
+  // 5. Build ticket hour rows
+  const ticketHourRows = comments.map(c => {
     const hoursType = c.hoursType ?? 'STANDARD'
     const clientPrices = c.ticket.client?.id ? pricingMap[c.ticket.client.id] ?? {} : {}
     const pricePerHour = clientPrices[hoursType] ?? 0
     return {
-      rowType: 'hours',
+      source: 'ticket',
       date: c.createdAt,
-      ticketId: c.ticket.id,
-      ticketNumber: c.ticket.ticketNumber,
-      ticketSubject: c.ticket.subject,
+      name: c.ticket.subject,
       hoursType,
       hoursTypeLabel: HOURS_LABELS[hoursType] ?? hoursType,
       hours: c.workedHours,
@@ -73,11 +84,34 @@ export async function GET(req: NextRequest) {
       totalPrice: Math.round(c.workedHours * pricePerHour * 100) / 100,
       addedBy: c.author.name,
       client: c.ticket.client,
+      ticketId: c.ticket.id,
+      ticketNumber: c.ticket.ticketNumber,
     }
   })
 
+  // 6. Build manual hour rows
+  const manualHourRows = manualHours.map(m => {
+    const clientPrices = m.clientId ? pricingMap[m.clientId] ?? {} : {}
+    const pricePerHour = clientPrices[m.hoursType] ?? 0
+    return {
+      source: 'manual',
+      date: m.date,
+      name: m.name,
+      hoursType: m.hoursType,
+      hoursTypeLabel: HOURS_LABELS[m.hoursType] ?? m.hoursType,
+      hours: m.hours,
+      pricePerHour,
+      totalPrice: Math.round(m.hours * pricePerHour * 100) / 100,
+      addedBy: m.user.name,
+      client: m.client,
+      manualId: m.id,
+    }
+  })
+
+  const allHourRows = [...ticketHourRows, ...manualHourRows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  // 7. Goods rows
   const goodsRows = movements.map(m => ({
-    rowType: 'goods',
     date: m.date,
     itemName: m.stockItem.name,
     quantity: m.quantity,
@@ -88,16 +122,17 @@ export async function GET(req: NextRequest) {
     client: m.client,
   }))
 
+  // 8. Summary
   const hoursByType: Record<string, number> = {}
   let totalHoursPrice = 0
-  for (const r of hourRows) {
+  for (const r of allHourRows) {
     hoursByType[r.hoursTypeLabel] = (hoursByType[r.hoursTypeLabel] ?? 0) + r.hours
     totalHoursPrice += r.totalPrice
   }
   const totalGoodsPrice = goodsRows.reduce((s, r) => s + r.totalPrice, 0)
 
   return NextResponse.json({
-    hourRows,
+    hourRows: allHourRows,
     goodsRows,
     summary: {
       hoursByType,
