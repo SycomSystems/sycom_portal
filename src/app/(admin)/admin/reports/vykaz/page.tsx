@@ -1,12 +1,14 @@
 'use client'
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download, Plus, X, Check, Ticket } from 'lucide-react'
+import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download, Plus, X, Check, Ticket, Pencil, Trash2 } from 'lucide-react'
 
 function fmt(n: number) { return n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string | Date) { return new Date(d).toLocaleDateString('sk-SK') }
+function toInputDate(d: string | Date) { return new Date(d).toISOString().slice(0, 10) }
 
 const HOURS_TYPES = [
   { value: 'STANDARD', label: 'Standard' },
@@ -22,6 +24,7 @@ const HOURS_COLORS: Record<string, string> = {
 }
 
 export default function VykazPage() {
+  const searchParams = useSearchParams()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role
   const sessionUserId = (session?.user as any)?.id
@@ -39,6 +42,7 @@ export default function VykazPage() {
   const [logoUrl, setLogoUrl] = useState<string|null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
+  // Add manual hours modal
   const [showModal, setShowModal] = useState(false)
   const [mDate, setMDate] = useState(today)
   const [mName, setMName] = useState('')
@@ -48,6 +52,20 @@ export default function VykazPage() {
   const [mClientId, setMClientId] = useState('')
   const [mSubmitting, setMSubmitting] = useState(false)
   const [mStatus, setMStatus] = useState<{ok:boolean;msg:string}|null>(null)
+
+  // Edit manual hours modal
+  const [editRow, setEditRow] = useState<any>(null)
+  const [eDate, setEDate] = useState('')
+  const [eName, setEName] = useState('')
+  const [eType, setEType] = useState('STANDARD')
+  const [eHours, setEHours] = useState('')
+  const [eSubmitting, setESubmitting] = useState(false)
+  const [eStatus, setEStatus] = useState<{ok:boolean;msg:string}|null>(null)
+
+  // Auto-open modal if ?addHours=1
+  useEffect(() => {
+    if (searchParams.get('addHours') === '1') setShowModal(true)
+  }, [searchParams])
 
   useEffect(() => {
     fetch('/api/settings/logo').then(r=>r.json()).then(d=>{if(d.filename)setLogoUrl('/uploads/'+d.filename)}).catch(()=>{})
@@ -165,6 +183,40 @@ export default function VykazPage() {
     finally { setMSubmitting(false) }
   }
 
+  function openEdit(row: any) {
+    setEditRow(row)
+    setEDate(toInputDate(row.date))
+    setEName(row.name)
+    setEType(row.hoursType)
+    setEHours(String(row.hours))
+    setEStatus(null)
+  }
+
+  async function handleEditSave() {
+    if (!editRow) return
+    setESubmitting(true)
+    try {
+      const res = await fetch('/api/manual-hours?id=' + editRow.manualId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: eDate, name: eName.trim(), hoursType: eType, hours: parseFloat(eHours) }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Chyba')
+      setEStatus({ ok: true, msg: 'Ulozene.' })
+      refetch()
+      setTimeout(() => { setEStatus(null); setEditRow(null) }, 1000)
+    } catch(e: any) { setEStatus({ ok: false, msg: e.message }) }
+    finally { setESubmitting(false) }
+  }
+
+  async function handleDelete(row: any) {
+    if (!confirm('Naozaj vymazat tieto hodiny?')) return
+    const res = await fetch('/api/manual-hours?id=' + row.manualId, { method: 'DELETE' })
+    if (res.ok) refetch()
+    else alert('Chyba pri mazani.')
+  }
+
   const LogoEl = () => logoUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={logoUrl} alt="Logo" style={{ maxHeight: 48, maxWidth: 160, objectFit: 'contain' }} />
@@ -203,7 +255,6 @@ export default function VykazPage() {
       `}</style>
 
       <div className="max-w-6xl mx-auto py-8 px-6">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -225,17 +276,9 @@ export default function VykazPage() {
           )}
         </div>
 
-        {/* Filters + Add button */}
+        {/* Filters */}
         <div className="no-print bg-white border border-gray-200 rounded-2xl p-5 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-end">
-            {/* LEFT: Add manual hours button */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">Pridat hodiny</p>
-              <button onClick={() => setShowModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors">
-                <Plus size={15} /> + Vykaz Prace
-              </button>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Datum od</label>
               <input type="date" value={from} onChange={e=>setFrom(e.target.value)}
@@ -265,7 +308,6 @@ export default function VykazPage() {
 
         {summary && (
           <div ref={printRef} id="vykaz-print">
-            {/* Logo header */}
             <div className="flex items-start justify-between mb-5 pb-4 border-b-2 border-gray-200">
               <LogoEl />
               <div className="text-right">
@@ -276,7 +318,6 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* Summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="summary-card bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
@@ -333,11 +374,12 @@ export default function VykazPage() {
                       {['Datum','Nazov','Typ hodin','Hodiny','Cena/hod','Spolu','Zapisal'].map(l => (
                         <th key={l} className="hidden print:table-cell px-3 py-2 text-left text-xs font-bold text-gray-700 border-b border-gray-300">{l}</th>
                       ))}
+                      {role === 'ADMIN' && <th className="no-print px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {sortedHours.length===0 ? (
-                      <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">Ziadne hodiny pre dany filter.</td></tr>
+                      <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">Ziadne hodiny pre dany filter.</td></tr>
                     ) : sortedHours.map((row: any, i: number) => (
                       <tr key={i} className={'hover:bg-gray-50 '+(row.source==='manual'?'bg-amber-50/40':'')}>
                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 text-xs">{fmtDate(row.date)}</td>
@@ -353,6 +395,16 @@ export default function VykazPage() {
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0?fmt(row.pricePerHour)+' EUR':'-'}</td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs font-semibold text-gray-800">{row.totalPrice>0?fmt(row.totalPrice)+' EUR':'-'}</td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500">{row.addedBy}</td>
+                        {role === 'ADMIN' && (
+                          <td className="no-print px-3 py-2.5 whitespace-nowrap">
+                            {row.source === 'manual' ? (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13}/></button>
+                                <button onClick={() => handleDelete(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13}/></button>
+                              </div>
+                            ) : <span className="text-[10px] text-gray-300 px-1">tiket</span>}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -363,7 +415,7 @@ export default function VykazPage() {
                         <td className="px-4 py-2.5 text-xs font-bold text-gray-800">{sortedHours.reduce((s:number,r:any)=>s+r.hours,0)} hod</td>
                         <td/>
                         <td className="px-4 py-2.5 text-xs font-bold text-sycom-600">{fmt(summary.totalHoursPrice)} EUR</td>
-                        <td/>
+                        <td/>{role==='ADMIN'&&<td/>}
                       </tr>
                     </tfoot>
                   )}
@@ -414,7 +466,6 @@ export default function VykazPage() {
               </div>
             </div>
 
-            {/* Grand total */}
             <div className="mt-4 flex items-center justify-end gap-6 text-sm px-2">
               <span className="text-gray-500">Prace: <strong className="text-gray-800">{fmt(summary.totalHoursPrice)} EUR</strong></span>
               <span className="text-gray-500">Tovar: <strong className="text-gray-800">{fmt(summary.totalGoodsPrice)} EUR</strong></span>
@@ -424,14 +475,12 @@ export default function VykazPage() {
         )}
       </div>
 
-      {/* Add manual hours modal */}
+      {/* ADD MANUAL HOURS MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <Plus size={16} className="text-green-600" /> Zadat hodiny bez tiketu
-              </h2>
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Plus size={16} className="text-green-600"/> Zadat hodiny bez tiketu</h2>
               <button onClick={()=>setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
             <div className="p-6 space-y-4">
@@ -493,6 +542,57 @@ export default function VykazPage() {
           </div>
         </div>
       )}
+
+      {/* EDIT MANUAL HOURS MODAL */}
+      {editRow && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Pencil size={16} className="text-sycom-500"/> Upravit hodiny</h2>
+              <button onClick={()=>setEditRow(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
+            </div>
+            <div className="p-6 space-y-4">
+              {eStatus && (
+                <div className={'flex items-center gap-2 px-3 py-2 rounded-xl text-sm '+(eStatus.ok?'bg-green-50 border border-green-200 text-green-700':'bg-red-50 border border-red-200 text-red-700')}>
+                  {eStatus.ok?<Check size={14}/>:<X size={14}/>} {eStatus.msg}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Datum *</label>
+                  <input type="date" value={eDate} onChange={e=>setEDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Pocet hodin *</label>
+                  <input type="number" min="0.25" step="0.25" value={eHours} onChange={e=>setEHours(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Popis prace *</label>
+                <input type="text" value={eName} onChange={e=>setEName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Typ hodin *</label>
+                <select value={eType} onChange={e=>setEType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                  {HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <p className="text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-xl">Pozn: hodiny z tiketov sa edituju priamo v tikete.</p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={()=>setEditRow(null)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button>
+              <button onClick={handleEditSave} disabled={eSubmitting||!eDate||!eName.trim()||!eHours}
+                className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
+                <Check size={15}/> {eSubmitting?'Ukladam...':'Ulozit zmeny'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PortalLayout>
   )
-                  }
+                          }
