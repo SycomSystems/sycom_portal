@@ -8,7 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ENUMS ───────────────────────────────────────────────
 enum Role {
   ADMIN
   AGENT
@@ -42,38 +41,37 @@ enum TicketCategory {
   OTHER
 }
 
-// ─── MODELS ──────────────────────────────────────────────
-
 model Client {
   id        String   @id @default(cuid())
   name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+  tickets   Ticket[]
 
   @@map("clients")
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          Role      @default(CLIENT)
-  department    String?
-  phone         String?
-  avatar        String?
-  isActive      Boolean   @default(true)
-  clientId      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ticketsCreated    Ticket[]        @relation("TicketCreator")
-  ticketsAssigned   Ticket[]        @relation("TicketAssignee")
-  comments          Comment[]
-  teamMemberships   TeamMember[]
-  notifications     Notification[]
-  sessions          Session[]
+  id              String       @id @default(cuid())
+  name            String
+  email           String       @unique
+  password        String
+  role            Role         @default(CLIENT)
+  department      String?
+  phone           String?
+  avatar          String?
+  isActive        Boolean      @default(true)
+  clientId        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ticketsCreated  Ticket[]     @relation("TicketCreator")
+  ticketsAssigned Ticket[]     @relation("TicketAssignee")
+  comments        Comment[]
+  teamMemberships TeamMember[]
+  notifications   Notification[]
+  sessions        Session[]
 
   @@map("users")
 }
@@ -115,24 +113,27 @@ model TeamMember {
 }
 
 model Ticket {
-  id           String          @id @default(cuid())
-  ticketNumber Int             @unique @default(autoincrement())
+  id           String         @id @default(cuid())
+  ticketNumber Int            @unique @default(autoincrement())
   subject      String
-  description  String          @db.Text
-  status       TicketStatus    @default(OPEN)
-  priority     TicketPriority  @default(MEDIUM)
-  category     TicketCategory  @default(OTHER)
+  description  String         @db.Text
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  category     TicketCategory @default(OTHER)
   department   String?
   slaDeadline  DateTime?
   resolvedAt   DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   creatorId    String
   assigneeId   String?
   teamId       String?
-  creator      User            @relation("TicketCreator",  fields: [creatorId],  references: [id])
-  assignee     User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  team         Team?           @relation(fields: [teamId], references: [id])
+  // Direct client relationship on the ticket — independent of who created it
+  clientId     String?
+  creator      User           @relation("TicketCreator",  fields: [creatorId],  references: [id])
+  assignee     User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  team         Team?          @relation(fields: [teamId],  references: [id])
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   comments     Comment[]
   attachments  Attachment[]
   notifications Notification[]
@@ -144,7 +145,6 @@ model Comment {
   id           String   @id @default(cuid())
   body         String   @db.Text
   isInternal   Boolean  @default(false)
-  // Time tracking — decimal hours worked (e.g. 1.5 = 1h 30min), used for monthly client billing
   workedHours  Float    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
