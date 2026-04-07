@@ -1,8 +1,8 @@
 'use client'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useQuery } from '@tanstack/react-query'
-import { Clock, Package, Euro, FileText, ExternalLink, ChevronDown, ChevronUp, Printer, Download } from 'lucide-react'
+import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download } from 'lucide-react'
 
 function fmt(n: number) { return n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { return new Date(d).toLocaleDateString('sk-SK') }
@@ -24,7 +24,16 @@ export default function VykazPage() {
   const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
+
+  // Load logo from settings (same source as Topbar)
+  useEffect(() => {
+    fetch('/api/settings/logo')
+      .then(r => r.json())
+      .then(data => { if (data.filename) setLogoUrl('/uploads/' + data.filename) })
+      .catch(() => {})
+  }, [])
 
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => fetch('/api/clients').then(r => r.json()) })
   const params = new URLSearchParams({ from, to })
@@ -84,7 +93,6 @@ export default function VykazPage() {
       ])
       const el = printRef.current
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-      const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageW = pdf.internal.pageSize.getWidth()
       const pageH = pdf.internal.pageSize.getHeight()
@@ -98,7 +106,7 @@ export default function VykazPage() {
         const srcH = sliceH * (canvas.height / imgH)
         const sliceCanvas = document.createElement('canvas')
         sliceCanvas.width = canvas.width
-        sliceCanvas.height = srcH
+        sliceCanvas.height = Math.ceil(srcH)
         const ctx = sliceCanvas.getContext('2d')!
         ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH)
         if (!first) pdf.addPage()
@@ -115,6 +123,26 @@ export default function VykazPage() {
       setPdfLoading(false)
     }
   }
+
+  // Logo element reused in both print and PDF
+  const LogoEl = () => logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="Logo" style={{ maxHeight: 48, maxWidth: 160, objectFit: 'contain' }} />
+  ) : (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 36, height: 36, background: '#1a6fba', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="3" width="20" height="14" rx="2" stroke="white" strokeWidth="1.8"/>
+          <path d="M8 21h8M12 17v4" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          <path d="M7 10l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a6fba', lineHeight: 1 }}>sycom</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', letterSpacing: 2, textTransform: 'uppercase', lineHeight: 1, marginTop: 2 }}>IT Podpora</div>
+      </div>
+    </div>
+  )
 
   return (
     <PortalLayout>
@@ -189,22 +217,14 @@ export default function VykazPage() {
         {summary && (
           <div ref={printRef} id="vykaz-print">
 
-            {/* ===== LOGO HEADER — visible only in print/PDF ===== */}
-            <div className="hidden print:block mb-5 pb-4 border-b-2 border-gray-800">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-baseline gap-0 mb-0.5">
-                    <span className="text-[22px] font-extrabold leading-none" style={{color:'#1a6fba'}}>Sycom</span>
-                    <span className="text-[22px] font-extrabold leading-none text-gray-400">Portal</span>
-                  </div>
-                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-semibold mt-0.5">Sycom Systems s.r.o.</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-gray-900">Vykaz prac a tovaru</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Obdobie: {periodLabel}</p>
-                  <p className="text-[10px] text-gray-500">Klient: {clientLabel}</p>
-                  <p className="text-[9px] text-gray-400 mt-1">Vygenerovane: {fmtDate(today)}</p>
-                </div>
+            {/* Logo header — shown in print AND used as top of PDF capture */}
+            <div className="flex items-start justify-between mb-5 pb-4 border-b-2 border-gray-200">
+              <LogoEl />
+              <div className="text-right">
+                <p className="text-base font-bold text-gray-900">Vykaz prac a tovaru</p>
+                <p className="text-xs text-gray-500 mt-0.5">Obdobie: {periodLabel}</p>
+                <p className="text-xs text-gray-500">Klient: {clientLabel}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Vygenerovane: {fmtDate(today)}</p>
               </div>
             </div>
 
@@ -273,7 +293,7 @@ export default function VykazPage() {
                     ) : allRows.map((row: any, i: number) => (
                       <tr key={i} className={'hover:bg-gray-50 ' + (row._type === 'goods' ? 'bg-blue-50/30' : '')}>
                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 text-xs">{fmtDate(row.date)}</td>
-                        <td className="px-4 py-2.5 text-gray-900 font-medium text-xs max-w-[200px] truncate">
+                        <td className="px-4 py-2.5 text-gray-900 font-medium text-xs max-w-[220px] truncate">
                           {row._type === 'hours' ? row.ticketSubject : <span className="flex items-center gap-1"><Package size={11} className="text-blue-400 shrink-0"/>{row.itemName}</span>}
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap">
