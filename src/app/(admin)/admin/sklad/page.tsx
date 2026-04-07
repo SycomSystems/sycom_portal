@@ -17,7 +17,7 @@ function fmt(n:number){return n.toLocaleString('sk-SK',{minimumFractionDigits:2,
 function fmtDate(d:string){return new Date(d).toLocaleDateString('sk-SK')}
 function toInputDate(d:string){return new Date(d).toISOString().slice(0,10)}
 
-function Autocomplete({label,value,onChange,onSelect,suggestions,onNotFound,notFoundLabel,placeholder,required}:{label:string;value:string;onChange:(v:string)=>void;onSelect:(id:string,name:string)=>void;suggestions:{id:string;name:string;sub?:string}[];onNotFound?:(name:string)=>void;notFoundLabel?:string;placeholder?:string;required?:boolean}){
+function Autocomplete({label,value,onChange,onSelect,suggestions,onNotFound,notFoundLabel,placeholder,required}:{label:string;value:string;onChange:(v:string)=>void;onSelect:(id:string,name:string,pp?:number|null)=>void;suggestions:{id:string;name:string;sub?:string}[];onNotFound?:(name:string)=>void;notFoundLabel?:string;placeholder?:string;required?:boolean}){
   const [open,setOpen]=useState(false)
   const filtered=value.length>0?suggestions.filter(s=>s.name.toLowerCase().includes(value.toLowerCase())):[]
   const exactMatch=suggestions.some(s=>s.name.toLowerCase()===value.toLowerCase())
@@ -27,7 +27,7 @@ function Autocomplete({label,value,onChange,onSelect,suggestions,onNotFound,notF
       <input type="text" value={value} onChange={e=>{onChange(e.target.value);setOpen(true)}} onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),150)} placeholder={placeholder} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/>
       {open&&value.length>0&&(
         <div className="absolute z-20 mt-1 w-full border border-gray-200 rounded-xl overflow-hidden shadow-lg bg-white max-h-44 overflow-y-auto">
-          {filtered.map(s=>(<button key={s.id} onMouseDown={()=>{onSelect(s.id,s.name);setOpen(false)}} className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors flex items-center justify-between"><span>{s.name}</span>{s.sub&&<span className="text-xs text-gray-400 ml-2">{s.sub}</span>}</button>))}
+          {filtered.map(s=>(<button key={s.id} onMouseDown={()=>{onSelect(s.id,s.name,(s as any).purchasePrice??null);setOpen(false)}} className="w-full text-left px-3 py-2 text-sm hover:bg-sycom-50 transition-colors flex items-center justify-between"><span>{s.name}</span>{s.sub&&<span className="text-xs text-gray-400 ml-2">{s.sub}</span>}</button>))}
           {!exactMatch&&onNotFound&&(<button onMouseDown={()=>{onNotFound(value);setOpen(false)}} className="w-full text-left px-3 py-2 text-sm text-green-700 font-medium hover:bg-green-50 transition-colors border-t border-gray-100">+ {notFoundLabel??'Pridat'}: &quot;{value}&quot;</button>)}
           {filtered.length===0&&!onNotFound&&(<p className="px-3 py-2 text-sm text-gray-400">Ziadne vysledky.</p>)}
         </div>
@@ -78,7 +78,17 @@ export default function SkladPage(){
   const [sellClientName,setSellClientName]=useState('')
   const [sellDate,setSellDate]=useState(new Date().toISOString().slice(0,10))
   const [sellNote,setSellNote]=useState('')
+  const [sellPurchasePrice,setSellPurchasePrice]=useState('')
+  const [sellMarkup,setSellMarkup]=useState('20')
   const [sellSubmitting,setSellSubmitting]=useState(false)
+
+  useEffect(()=>{
+    if(sellPurchasePrice){
+      const pp=Number(sellPurchasePrice)
+      const mu=Number(sellMarkup||20)
+      setSellPrice((pp*(1+mu/100)).toFixed(2))
+    }
+  },[sellMarkup,sellPurchasePrice])
 
   // Edit movement (ADMIN only)
   const [editMovement,setEditMovement]=useState<Movement|null>(null)
@@ -145,8 +155,8 @@ export default function SkladPage(){
     try{
       const res=await fetch('/api/stock/movements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'SELL',stockItemId:sellItemId,quantity:parseFloat(sellQty),pricePerUnit:parseFloat(sellPrice),vatRate:selectedSellItem?.vatRate??20,clientId:sellClientId||null,note:sellNote||null,date:sellDate})})
       const data=await res.json();if(!res.ok)throw new Error(data.error||'Chyba')
-      setModal(null);setSellItemId('');setSellItemName('');setSellQty('');setSellPrice('');setSellClientId('');setSellClientName('');setSellNote('');setSellDate(new Date().toISOString().slice(0,10))
-      load();showStatus('success','Predaj bol zaznamenaný.')
+      setModal(null);setSellItemId('');setSellItemName('');setSellQty('');setSellPrice('');setSellPurchasePrice('');setSellMarkup('20');setSellClientId('');setSellClientName('');setSellNote('');setSellDate(new Date().toISOString().slice(0,10))
+      load();showStatus('success','Predaj bol zaznamenanÃ½.')
     }catch(e:any){showStatus('error',e.message)}finally{setSellSubmitting(false)}
   }
 
@@ -274,11 +284,11 @@ export default function SkladPage(){
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10"><h2 className="text-base font-semibold text-gray-900">Predaj tovaru</h2><button onClick={()=>setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button></div>
             <div className="p-6 space-y-4">
-              <Autocomplete label="Tovar" value={sellItemName} onChange={v=>{setSellItemName(v);setSellItemId('');setSellPrice('')}} onSelect={(id,name)=>{setSellItemId(id);setSellItemName(name)}} suggestions={itemSuggestions.filter(i=>{const item=items.find(x=>x.id===i.id);return(item?.currentStock??0)>0})} placeholder="Hladat tovar na sklade..." required/>
+              <Autocomplete label="Tovar" value={sellItemName} onChange={v=>{setSellItemName(v);setSellItemId('');setSellPrice('');setSellPurchasePrice('')}} onSelect={(id,name,pp)=>{setSellItemId(id);setSellItemName(name);const p=Number(pp||0);const mu=Number(sellMarkup||20);setSellPurchasePrice(pp!=null?String(pp):'');setSellPrice(p>0?(p*(1+mu/100)).toFixed(2):'');}} suggestions={itemSuggestions.filter(i=>{const item=items.find(x=>x.id===i.id);return(item?.currentStock??0)>0})} placeholder="Hladat tovar na sklade..." required/>
               {selectedSellItem&&<p className="text-xs text-gray-400">Skladom: <strong>{selectedSellItem.currentStock} {selectedSellItem.unit}</strong></p>}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-medium text-gray-500 mb-1">Mnozstvo *</label><input type="number" min="0.01" step="0.01" value={sellQty} onChange={e=>setSellQty(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
-                <div><label className="block text-xs font-medium text-gray-500 mb-1">Predajna cena/ks bez DPH (EUR) *</label><input type="number" min="0" step="0.01" value={sellPrice} onChange={e=>setSellPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
+                <div><label className="block text-xs font-medium text-gray-500 mb-1">Nákupná cena/ks (EUR)</label><input readOnly value={sellPurchasePrice} placeholder="Vyberte produkt..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-400 cursor-default"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Prirážka (%)</label><input type="number" min="0" value={sellMarkup} onChange={e=>{setSellMarkup(e.target.value)}} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Predajná cena/ks bez DPH (EUR) *</label><input type="number" min="0" step="0.01" value={sellPrice} onChange={e=>setSellPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
               </div>
               <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"><p className="text-xs text-gray-500 font-medium">Spolu bez DPH</p><p className="text-lg font-bold text-gray-900">{fmt(sellTotal)} EUR</p></div>
               <Autocomplete label="Zakaznik" value={sellClientName} onChange={v=>{setSellClientName(v);setSellClientId('')}} onSelect={(id,name)=>{setSellClientId(id);setSellClientName(name)}} suggestions={clientSuggestions} placeholder="Hladat zakaznika..."/>
@@ -302,7 +312,7 @@ export default function SkladPage(){
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Pencil size={16} className="text-sycom-500"/> Upravit pohyb</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{editMovement.stockItem.name} — <span className={'text-[11px] font-bold px-1.5 py-0.5 rounded-full '+MOVEMENT_COLORS[editMovement.type]}>{MOVEMENT_LABELS[editMovement.type]}</span></p>
+                <p className="text-xs text-gray-400 mt-0.5">{editMovement.stockItem.name} â <span className={'text-[11px] font-bold px-1.5 py-0.5 rounded-full '+MOVEMENT_COLORS[editMovement.type]}>{MOVEMENT_LABELS[editMovement.type]}</span></p>
               </div>
               <button onClick={()=>setEditMovement(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
