@@ -21,7 +21,21 @@ function slugify(text: string) {
     .replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim()
 }
 
+// Staff-only check helper
+function isStaff(role: string) {
+  return role === 'ADMIN' || role === 'AGENT'
+}
+
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as any).role
+  // Only ADMIN and AGENT can access the knowledge base
+  if (!isStaff(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { searchParams } = new URL(req.url)
   const search    = searchParams.get('search')
   const category  = searchParams.get('category')
@@ -40,7 +54,6 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
   })
 
-  // Derive unique categories from articles
   const categorySet = new Set<string>()
   articles.forEach(a => { if (a.category) categorySet.add(a.category) })
   const categories = Array.from(categorySet)
@@ -53,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const role = (session.user as any).role
-  if (role === 'CLIENT' || role === 'CLIENT_MANAGER') {
+  if (!isStaff(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
