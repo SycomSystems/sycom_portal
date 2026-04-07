@@ -8,8 +8,10 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
       <Topbar />
       <div className="flex pt-[62px] min-h-screen">
         <Sidebar />
-        <main className="ml-[220px] flex-1 p-7 min-h-[calc(100vh-62px)]">
-          {children}
+        <main className="ml-[220px] flex-1 min-h-[calc(100vh-62px)] overflow-auto">
+          <div className="w-full max-w-6xl mx-auto px-7 py-7">
+            {children}
+          </div>
         </main>
       </div>
     </>
