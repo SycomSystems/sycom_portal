@@ -94,6 +94,10 @@ model Supplier {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   stockMovements StockMovement[]
+  priceList    SupplierPrice[]
+  ico          String?
+  dic          String?
+  website      String?
   @@map("suppliers")
 }
 
@@ -109,6 +113,16 @@ model StockItem {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   movements    StockMovement[]
+  description       String?   @db.Text
+  location          String?
+  photo             String?
+  maxStock          Int       @default(0)
+  avgPurchasePrice  Float     @default(0)
+  lastPurchasePrice Float     @default(0)
+  lastSalePrice     Float     @default(0)
+  serialTracking    Boolean   @default(false)
+  supplierPrices    SupplierPrice[]
+  serialNumbers     SerialNumber[]
   @@map("stock_items")
 }
 
@@ -130,6 +144,9 @@ model StockMovement {
   supplier     Supplier?         @relation(fields: [supplierId], references: [id])
   client       Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   addedBy      User              @relation(fields: [addedById], references: [id])
+  supplierPriceId  String?
+  serialNumber     String?
+  invoiceNumber    String?
   @@map("stock_movements")
 }
 
@@ -284,4 +301,43 @@ model KbArticle {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@map("kb_articles")
+}
+
+model SupplierPrice {
+  id            String     @id @default(cuid())
+  stockItemId   String
+  supplierId    String
+  price         Float
+  currency      String     @default("EUR")
+  isPreferred   Boolean    @default(false)
+  minOrderQty   Float?
+  leadTimeDays  Int?
+  supplierSku   String?
+  note          String?
+  validFrom     DateTime   @default(now())
+  validTo       DateTime?
+  lastUpdated   DateTime   @default(now())
+
+  stockItem     StockItem  @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  supplier      Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([stockItemId, supplierId])
+  @@map("supplier_prices")
+}
+
+model SerialNumber {
+  id            String     @id @default(cuid())
+  serialNumber  String     @unique
+  stockItemId   String
+  status        String     @default("IN_STOCK")
+  purchaseDate  DateTime?
+  saleDate      DateTime?
+  clientId      String?
+  note          String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  stockItem     StockItem  @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@map("serial_numbers")
 }
