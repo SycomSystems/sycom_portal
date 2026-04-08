@@ -48,8 +48,7 @@ export default function KbPage() {
 
   if (!isStaff) return (
     <PortalLayout>
-      <div className="max-w-2xl mx-auto py-20 text-center px-6">
-        <BookOpen size={40} className="text-gray-300 mx-auto mb-4"/>
+        <div className="w-full mx-auto py-20 text-center px-6"></div>        <BookOpen size={40} className="text-gray-300 mx-auto mb-4"/>
         <h2 className="text-xl font-bold text-gray-700 mb-2">Znalostná báza</h2>
         <p className="text-gray-500 text-sm">Táto sekcia je dostupná iba pre pracovníkov podpory.</p>
       </div>
