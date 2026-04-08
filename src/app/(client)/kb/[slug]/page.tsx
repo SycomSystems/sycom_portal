@@ -1,4 +1,5 @@
-'use client'
+63
+  'use client'
 import { useQuery } from '@tanstack/react-query'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useParams, useRouter } from 'next/navigation'
@@ -7,7 +8,7 @@ import { ChevronLeft, Tag, Calendar, Pencil } from 'lucide-react'
 
 function renderMarkdown(md: string): string {
   return md
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold text-gray-800 mt-5 mb-2">$1</h3>')
+max-w-3xl mx-auto    .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold text-gray-800 mt-5 mb-2">$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2 class="text-lg font-bold text-gray-800 mt-6 mb-2 pb-2 border-b border-gray-200">$1</h2>')
     .replace(/^# (.+)$/gm,   '<h1 class="text-xl font-bold text-sycom-700 mt-4 mb-3">$1</h1>')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
@@ -56,7 +57,7 @@ export default function KbArticlePage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-3xl mx-auto py-8 px-6">
+      <div className="w-full py-8 px-6">
         <button onClick={() => router.back()}
           className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors">
           <ChevronLeft size={16}/> Späť na znalostná báza
@@ -85,7 +86,8 @@ export default function KbArticlePage() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
                 {article.category && (
                   <span className="bg-sycom-50 text-sycom-700 font-semibold px-2.5 py-1 rounded-full">{article.category}</span>
-                )}
+                63
+                
                 <span className="flex items-center gap-1"><Calendar size={11}/>{fmtDate(article.updatedAt)}</span>
                 {article.tags && article.tags.split(',').map((t: string) => (
                   <span key={t} className="flex items-center gap-0.5 text-gray-400"><Tag size={10}/>{t.trim()}</span>
