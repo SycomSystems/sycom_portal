@@ -1,54 +1,48 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { useQuery } from '@tanstack/react-query'
-import { BookOpen, Search, ChevronRight, Tag, Plus } from 'lucide-react'
-
-const CATEGORIES = ['Sieť', 'Email', 'VPN', 'Windows', 'Hardware', 'Bezpečnosť', 'Zálohovanie', 'Iné']
-const CAT_COLORS: Record<string,string> = {
-  'Sieť':'bg-blue-100 text-blue-700','Email':'bg-purple-100 text-purple-700',
-  'VPN':'bg-indigo-100 text-indigo-700','Windows':'bg-sky-100 text-sky-700',
-  'Hardware':'bg-orange-100 text-orange-700','Bezpečnosť':'bg-red-100 text-red-700',
-  'Zálohovanie':'bg-green-100 text-green-700','Iné':'bg-gray-100 text-gray-600',
-}
-const CAT_ICONS: Record<string,string> = {
-  'Sieť':'🌐','Email':'📧','VPN':'🔒','Windows':'🖥️',
-  'Hardware':'🖨️','Bezpečnosť':'🛡️','Zálohovanie':'💾','Iné':'📄',
-}
+import { Search, BookOpen, ChevronRight, Plus, Pencil, Trash2, Eye } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function KbPage() {
+  const [search,     setSearch]     = useState('')
+  const [categoryId, setCategoryId] = useState('')
   const { data: session } = useSession()
   const role = (session?.user as any)?.role
-  const router = useRouter()
-  const [search, setSearch] = useState('')
-  const [activeCat, setActiveCat] = useState('')
   const isStaff = role === 'ADMIN' || role === 'AGENT'
+  const router = useRouter()
+  const queryClient = useQueryClient()
 
-  const { data: articles=[], isLoading } = useQuery({
-    queryKey: ['kb-published'],
-    queryFn: () => fetch('/api/kb').then(r=>r.json()).then(d=>Array.isArray(d)?d:[]),
-    enabled: isStaff,
+  // ── ALL hooks must be before any early returns ──
+  const params = new URLSearchParams()
+  if (search)     params.set('search', search)
+  if (categoryId) params.set('categoryId', categoryId)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['kb', search, categoryId],
+    queryFn:  () => fetch(`/api/kb?${params}`).then(r => r.json()),
   })
 
-  const filtered = useMemo(()=>articles.filter((a:any)=>{
-    const matchCat = !activeCat || a.category === activeCat
-    const matchSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || (a.tags||'').toLowerCase().includes(search.toLowerCase())
-    return matchCat && matchSearch
-  }), [articles, activeCat, search])
+  const articles   = Array.isArray(data) ? data : (data?.articles ?? [])
+  const categories = Array.isArray(data) ? [] : (data?.categories ?? [])
 
-  const byCategory = useMemo(()=>{
-    const groups: Record<string, any[]> = {}
-    filtered.forEach((a:any)=>{ const cat = a.category||'Iné'; if(!groups[cat]) groups[cat]=[]; groups[cat].push(a) })
-    return groups
-  }, [filtered])
+  async function deleteArticle(id: string) {
+    if (!confirm('Zmazať článok?')) return
+    await fetch(`/api/kb/${id}`, { method: 'DELETE' })
+    queryClient.invalidateQueries({ queryKey: ['kb'] })
+  }
 
   if (!session) return null
 
   if (!isStaff) return (
     <PortalLayout>
-        <div className="w-full mx-auto py-20 text-center px-6"></div>        <BookOpen size={40} className="text-gray-300 mx-auto mb-4"/>
+      <div className="w-full mx-auto py-20 text-center px-6">
+        <BookOpen size={40} className="text-gray-300 mx-auto mb-4"/>
         <h2 className="text-xl font-bold text-gray-700 mb-2">Znalostná báza</h2>
         <p className="text-gray-500 text-sm">Táto sekcia je dostupná iba pre pracovníkov podpory.</p>
       </div>
@@ -57,92 +51,162 @@ export default function KbPage() {
 
   return (
     <PortalLayout>
-      <div className="w-full py-8 px-6">
-        <div className="bg-gradient-to-br from-sycom-600 to-sycom-800 rounded-3xl p-8 mb-8 text-white">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-3"><BookOpen size={24}/><h1 className="text-2xl font-bold">Znalostná báza</h1></div>
-              <p className="text-sycom-100 mb-5">Návody, riešenia a dokumentácia pre tím podpory</p>
-              <div className="relative max-w-lg">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Hľadať článok, napr. VPN, Outlook, heslo..."
-                  className="w-full pl-10 pr-4 py-3 bg-white text-gray-900 rounded-2xl text-sm focus:outline-none placeholder-gray-400 shadow-lg"/>
-              </div>
-            </div>
-            {role==='ADMIN'||role==='AGENT' ? (
-              <button onClick={()=>router.push('/admin/kb')}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold rounded-xl transition-colors">
-                <Plus size={15}/> Správa článkov
-              </button>
-            ) : null}
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Znalostná báza</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Návody, riešenia a dokumentácia</p>
+        </div>
+        {isStaff && (
+          <button onClick={() => router.push('/admin/kb/new')} className="btn btn-primary">
+            <Plus size={14}/> Nový článok
+          </button>
+        )}
+      </div>
+
+      {/* Hero search */}
+      <div className="bg-gradient-to-br from-sycom-500 to-sycom-700 rounded-2xl p-8 mb-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:32px_32px]" />
+        <div className="relative z-10 max-w-xl mx-auto text-center">
+          <BookOpen size={32} className="mx-auto mb-3 text-white/80" />
+          <h2 className="text-xl font-bold text-white mb-1">Ako vám môžeme pomôcť?</h2>
+          <p className="text-sm text-white/70 mb-5">Prehľadajte naše návody a dokumentáciu</p>
+          <div className="relative">
+            <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="text"
+              className="w-full bg-white rounded-xl py-3 pl-10 pr-4 text-sm text-gray-800 outline-none shadow-lg placeholder:text-gray-400 focus:ring-2 focus:ring-white/30"
+              placeholder="Hľadať článok, napr. VPN, Outlook, heslo…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
-          <button onClick={()=>setActiveCat('')}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${!activeCat?'bg-sycom-500 text-white':'bg-white border border-gray-200 text-gray-600 hover:border-sycom-300'}`}>
-            Všetky {!activeCat && articles.length > 0 && `(${articles.length})`}
+      {/* Category filters */}
+      <div className="flex gap-2 flex-wrap mb-6">
+        <button onClick={() => setCategoryId('')}
+          className={cn('text-xs font-semibold px-4 py-2 rounded-full border transition-all',
+            categoryId === '' ? 'bg-sycom-500 text-white border-sycom-500 shadow-sm' : 'bg-white text-gray-500 border-gray-300 hover:border-sycom-400 hover:text-sycom-500')}>
+          📚 Všetky
+        </button>
+        {categories.map((cat: any) => (
+          <button key={cat.id} onClick={() => setCategoryId(cat.id)}
+            className={cn('text-xs font-semibold px-4 py-2 rounded-full border transition-all',
+              categoryId === cat.id ? 'bg-sycom-500 text-white border-sycom-500 shadow-sm' : 'bg-white text-gray-500 border-gray-300 hover:border-sycom-400 hover:text-sycom-500')}>
+            {cat.icon} {cat.name}
           </button>
-          {CATEGORIES.filter(c=>articles.some((a:any)=>a.category===c)).map(c=>(
-            <button key={c} onClick={()=>setActiveCat(c===activeCat?'':c)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeCat===c?'bg-sycom-500 text-white':'bg-white border border-gray-200 text-gray-600 hover:border-sycom-300'}`}>
-              {CAT_ICONS[c]} {c}
+        ))}
+      </div>
+
+      {/* Category cards when no filter */}
+      {!search && !categoryId && (
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {categories.map((cat: any) => (
+            <button key={cat.id} onClick={() => setCategoryId(cat.id)}
+              className="card p-5 text-left hover:border-sycom-400 hover:-translate-y-1 transition-all group cursor-pointer">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3"
+                style={{ background: cat.color + '18' }}>
+                {cat.icon}
+              </div>
+              <p className="text-sm font-bold text-gray-800 mb-1 group-hover:text-sycom-500 transition-colors">{cat.name}</p>
+              <p className="text-xs text-gray-400">{cat.description ?? 'Prehľadajte články'}</p>
+              <div className="flex items-center gap-1 text-xs text-sycom-500 font-semibold mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                Zobraziť články <ChevronRight size={12} />
+              </div>
             </button>
           ))}
         </div>
+      )}
 
-        {isLoading ? (
-          <div className="py-16 text-center text-gray-400">Načítavam...</div>
-        ) : articles.length === 0 ? (
-          <div className="py-16 text-center">
-            <BookOpen size={40} className="text-gray-200 mx-auto mb-4"/>
-            <p className="text-gray-500 text-sm mb-4">Zatiaľ žiadne články v znalostnej báze</p>
-            <button onClick={()=>router.push('/admin/kb/new')} className="inline-flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600">
-              <Plus size={14}/> Pridať prvý článok
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 text-sm">Žiadne výsledky pre &ldquo;{search}&rdquo;</div>
-        ) : activeCat ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((a:any)=><ArticleCard key={a.id} article={a} router={router}/>)}
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {Object.entries(byCategory).map(([cat, arts])=>(
-              <div key={cat}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">{CAT_ICONS[cat]}</span>
-                  <h2 className="text-base font-bold text-gray-800">{cat}</h2>
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{arts.length}</span>
+      {/* Articles list when filter active */}
+      {(search || categoryId) && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            {articles.length} {articles.length === 1 ? 'článok' : 'článkov'}
+          </p>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="w-6 h-6 border-2 border-sycom-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : articles.length === 0 ? (
+            <div className="card p-12 text-center">
+              <BookOpen size={32} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-gray-400 font-semibold">Žiadne články nenájdené</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {articles.map((art: any) => (
+                <div key={art.id} className="card flex items-start gap-4 p-5 hover:border-sycom-400 transition-all group">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                    style={{ background: (art.category?.color ?? '#1a6fba') + '18' }}>
+                    {art.category?.icon ?? '📄'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-800 group-hover:text-sycom-500 transition-colors mb-0.5">{art.title}</p>
+                    {art.excerpt && <p className="text-xs text-gray-500 line-clamp-2">{art.excerpt}</p>}
+                    <div className="flex items-center gap-3 mt-2 text-[11px] font-mono text-gray-400">
+                      <span className="flex items-center gap-1"><Eye size={10}/> {art.viewCount}</span>
+                      <span>·</span>
+                      <span>{formatDate(art.updatedAt)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Link href={`/kb/${art.slug}`}
+                      className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-sycom-400 hover:text-sycom-500 transition-colors">
+                      <ChevronRight size={12}/> Zobraziť
+                    </Link>
+                    {isStaff && (
+                      <>
+                        <button onClick={() => router.push(`/admin/kb/${art.id}`)}
+                          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-sycom-400 hover:text-sycom-500 transition-colors">
+                          <Pencil size={12}/> Upraviť
+                        </button>
+                        <button onClick={() => deleteArticle(art.id)}
+                          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-400 hover:bg-red-50 transition-colors">
+                          <Trash2 size={12}/>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {arts.map((a:any)=><ArticleCard key={a.id} article={a} router={router}/>)}
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Popular articles */}
+      {!search && !categoryId && articles.length > 0 && (
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">🔥 Najčítanejšie články</p>
+          <div className="space-y-2">
+            {articles.slice(0, 5).map((art: any) => (
+              <div key={art.id} className="card flex items-center gap-4 px-5 py-3.5 hover:border-sycom-400 hover:bg-sycom-50 transition-all group">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                  style={{ background: (art.category?.color ?? '#1a6fba') + '18' }}>
+                  {art.category?.icon ?? '📄'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 group-hover:text-sycom-500 transition-colors truncate">{art.title}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="flex items-center gap-1 text-[11px] font-mono text-gray-400"><Eye size={10}/> {art.viewCount}</span>
+                  <Link href={`/kb/${art.slug}`}
+                    className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-sycom-400 hover:text-sycom-500 transition-colors">
+                    <ChevronRight size={12}/>
+                  </Link>
+                  {isStaff && (
+                    <button onClick={() => router.push(`/admin/kb/${art.id}`)}
+                      className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-sycom-400 hover:text-sycom-500 transition-colors">
+                      <Pencil size={12}/>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
-    </PortalLayout>
-  )
-}
-
-function ArticleCard({article:a, router}:any) {
-  return (
-    <button onClick={()=>router.push(`/kb/${a.slug}`)}
-      className="w-full text-left bg-white border border-gray-200 rounded-2xl p-4 hover:border-sycom-300 hover:shadow-sm transition-all group">
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-gray-900 text-sm leading-snug group-hover:text-sycom-600 transition-colors">{a.title}</p>
-        <ChevronRight size={14} className="text-gray-300 group-hover:text-sycom-500 shrink-0 mt-0.5 transition-colors"/>
-      </div>
-      {a.tags && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {a.tags.split(',').slice(0,3).map((t:string)=>(
-            <span key={t} className="text-[10px] text-gray-400 flex items-center gap-0.5"><Tag size={8}/>{t.trim()}</span>
-          ))}
         </div>
       )}
-    </button>
+    </PortalLayout>
   )
 }
