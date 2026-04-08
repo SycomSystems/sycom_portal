@@ -17,11 +17,9 @@ function slugify(text: string) {
     .replace(/[áäà]/g, 'a').replace(/[éě]/g, 'e').replace(/[íî]/g, 'i')
     .replace(/[óô]/g, 'o').replace(/[úů]/g, 'u').replace(/[č]/g, 'c')
     .replace(/[š]/g, 's').replace(/[ž]/g, 'z').replace(/[ý]/g, 'y')
-    .replace(/[ňň]/g, 'n').replace(/[ľĺ]/g, 'l').replace(/[ŕ]/g, 'r')
-    .replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim()
+    .replace(/[^\\w\\s-]/g, '').replace(/\\s+/g, '-').replace(/-+/g, '-').trim()
 }
 
-// Staff-only check helper
 function isStaff(role: string) {
   return role === 'ADMIN' || role === 'AGENT'
 }
@@ -29,63 +27,48 @@ function isStaff(role: string) {
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const role = (session.user as any).role
-  // Only ADMIN and AGENT can access the knowledge base
-  if (!isStaff(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!isStaff(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
-  const search    = searchParams.get('search')
-  const category  = searchParams.get('category')
-  const published = searchParams.get('published')
+  const all = searchParams.get('all') === '1'
+  const category = searchParams.get('category')
+  const search = searchParams.get('q')
 
   const where: any = {}
-  if (published !== 'all') where.isPublished = true
+  if (!all) where.isPublished = true
   if (category) where.category = category
   if (search) where.OR = [
     { title: { contains: search } },
-    { body:  { contains: search } },
+    { body: { contains: search } },
+    { tags: { contains: search } },
   ]
 
   const articles = await prisma.kbArticle.findMany({
     where,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isPublished: 'desc' }, { updatedAt: 'desc' }],
+    select: { id: true, slug: true, title: true, category: true, tags: true, isPublished: true, createdAt: true, updatedAt: true },
   })
-
-  const categorySet = new Set<string>()
-  articles.forEach(a => { if (a.category) categorySet.add(a.category) })
-  const categories = Array.from(categorySet)
-
-  return NextResponse.json({ articles, categories })
+  return NextResponse.json(articles)
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const role = (session.user as any).role
-  if (!isStaff(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!isStaff(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body   = await req.json()
+  const body = await req.json()
   const parsed = createSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ error: 'Neplatné dáta' }, { status: 400 })
 
-  const slug = slugify(parsed.data.title) + '-' + Date.now()
+  const { title, body: articleBody, category = 'Iné', tags, isPublished = false } = parsed.data
+  let slug = slugify(title)
+  const existing = await prisma.kbArticle.findUnique({ where: { slug } })
+  if (existing) slug = `${slug}-${Date.now()}`
 
   const article = await prisma.kbArticle.create({
-    data: {
-      title:       parsed.data.title,
-      body:        parsed.data.body,
-      category:    parsed.data.category || 'Všeobecné',
-      tags:        parsed.data.tags || null,
-      isPublished: parsed.data.isPublished ?? false,
-      slug,
-    },
+    data: { title, body: articleBody, category, tags, isPublished, slug }
   })
-
   return NextResponse.json(article, { status: 201 })
 }
