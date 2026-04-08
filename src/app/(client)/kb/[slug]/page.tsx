@@ -8,7 +8,7 @@ import { ChevronLeft, Tag, Calendar, Pencil } from 'lucide-react'
 
 function renderMarkdown(md: string): string {
   return md
-max-w-3xl mx-auto    .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold text-gray-800 mt-5 mb-2">$1</h3>')
+.replace(/^### (.+)$/gm, '<h3 class="text-base font-bold text-gray-800 mt-5 mb-2">$1</h3>')
     .replace(/^## (.+)$/gm,  '<h2 class="text-lg font-bold text-gray-800 mt-6 mb-2 pb-2 border-b border-gray-200">$1</h2>')
     .replace(/^# (.+)$/gm,   '<h1 class="text-xl font-bold text-sycom-700 mt-4 mb-3">$1</h1>')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
