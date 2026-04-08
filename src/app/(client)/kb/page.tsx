@@ -58,7 +58,7 @@ export default function KbPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-6xl mx-auto py-8 px-6">
+      <div className="w-full py-8 px-6">
         <div className="bg-gradient-to-br from-sycom-600 to-sycom-800 rounded-3xl p-8 mb-8 text-white">
           <div className="flex items-start justify-between">
             <div>
