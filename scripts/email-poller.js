@@ -90,9 +90,13 @@ async function processMessage(imap, msg) {
     return
   }
 
-  const creator = await prisma.user.findFirst({ where: { clientId: client.id }, orderBy: { createdAt: 'asc' } })
+  let creator = await prisma.user.findFirst({ where: { clientId: client.id }, orderBy: { createdAt: 'asc' } })
   if (!creator) {
-    log('warn', `No user for client "${client.name}" — skipping`)
+    log('warn', `No user for client "${client.name}" — falling back to admin`)
+    creator = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } })
+  }
+  if (!creator) {
+    log('warn', 'No admin user found — skipping')
     await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
@@ -143,7 +147,13 @@ async function poll() {
       const uids = await imap.search({ seen: false })
       log('info', `Found ${uids.length} unseen message(s)`)
       if (uids.length) {
+        // Collect all messages first — modifying flags inside fetch loop corrupts the stream
+        const messages = []
         for await (const msg of imap.fetch(uids, { source: true })) {
+          messages.push({ seq: msg.seq, source: msg.source })
+        }
+        log('info', `Collected ${messages.length} message(s) — processing...`)
+        for (const msg of messages) {
           try { await processMessage(imap, msg) } catch (e) { log('error', 'Message error: ' + e.message) }
         }
       }
