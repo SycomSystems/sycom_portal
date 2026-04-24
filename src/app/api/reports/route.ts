@@ -87,6 +87,24 @@ export async function GET(req: NextRequest) {
     })
   )
 
+  // SLA compliance per period
+  const [resolvedWeekList, resolvedMonthList] = await Promise.all([
+    prisma.ticket.findMany({
+      where: { status: 'RESOLVED', resolvedAt: { gte: weekStart } },
+      select: { resolvedAt: true, slaDeadline: true }
+    }),
+    prisma.ticket.findMany({
+      where: { status: 'RESOLVED', resolvedAt: { gte: monthStart } },
+      select: { resolvedAt: true, slaDeadline: true }
+    }),
+  ])
+  const resolvedWeek  = resolvedWeekList.length
+  const resolvedMonth = resolvedMonthList.length
+  const slaWeek   = resolvedWeekList.filter(t => t.slaDeadline && t.resolvedAt! <= t.slaDeadline).length
+  const slaMonth  = resolvedMonthList.filter(t => t.slaDeadline && t.resolvedAt! <= t.slaDeadline).length
+  const todayList = resolvedWeekList.filter(t => t.resolvedAt! >= todayStart)
+  const slaToday  = todayList.filter(t => t.slaDeadline && t.resolvedAt! <= t.slaDeadline).length
+
   return NextResponse.json({
     summary: {
       totalOpen,
@@ -96,6 +114,11 @@ export async function GET(req: NextRequest) {
       totalThisMonth,
       avgResolutionHours: Math.round(avgResolutionHours * 10) / 10,
       slaBreached,
+      resolvedWeek,
+      resolvedMonth,
+      slaToday,
+      slaWeek,
+      slaMonth,
     },
     byStatus,
     byPriority,
