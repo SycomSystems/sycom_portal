@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import PortalLayout from '@/components/layout/PortalLayout'
+import { PortalLayout } from '@/components/layout/PortalLayout'
 import { Upload, CheckCircle, AlertCircle, ImageIcon, Trash2, Phone, Save, Mail, Server, Lock, Eye, EyeOff, ToggleLeft, ToggleRight } from 'lucide-react'
 
 export default function SettingsPage() {
