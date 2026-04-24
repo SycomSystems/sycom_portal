@@ -120,14 +120,14 @@ export default function UsersPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-5xl mx-auto py-8 px-6">
+      <div className="w-full py-2 px-5">
         {flash && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-sm">
             <CheckCircle size={16} /> {flash}
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Používatelia</h1>
             <p className="text-sm text-gray-500 mt-0.5">{users.length} používateľov celkom</p>
@@ -150,7 +150,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">Načítavam...</td></tr>
+                <tr><td colSpan={5} className="px-5 py-4 text-center text-gray-400">Načítavam...</td></tr>
               ) : users.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3">
@@ -201,7 +201,7 @@ export default function UsersPage() {
               <h2 className="text-base font-semibold text-gray-900">{modal === 'create' ? 'Nový používateľ' : 'Upraviť používateľa'}</h2>
               <button onClick={() => setModal(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X size={16} /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Celé meno *</label>

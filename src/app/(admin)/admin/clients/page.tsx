@@ -182,16 +182,16 @@ export default function ClientsPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-4xl mx-auto py-8 px-6">
+      <div className="w-full py-2 px-5">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Klienti</h1>
           <p className="text-sm text-gray-500 mt-1">Spravujte zoznam klientov a ich cenniky.</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-3">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-base font-semibold text-gray-900">Pridat noveho klienta</h2>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 space-y-4">
             <FormFields form={newForm} setForm={setNewForm} />
             <div className="flex justify-end">
               <button onClick={handleAdd} disabled={adding || !newForm.name.trim()}
@@ -214,7 +214,7 @@ export default function ClientsPage() {
           </div>
           <div className="divide-y divide-gray-100">
             {loading ? (
-              <div className="px-6 py-8 text-center text-sm text-gray-400">Nacitavam...</div>
+              <div className="px-6 py-4 text-center text-sm text-gray-400">Nacitavam...</div>
             ) : clients.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <Building2 size={32} className="mx-auto mb-3 text-gray-200" />

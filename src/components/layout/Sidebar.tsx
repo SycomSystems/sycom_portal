@@ -44,10 +44,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-gray-100">
-      <div className="h-16 flex items-center px-5 border-b border-gray-100">
-        <span className="text-lg font-bold text-sycom-600">Sycom</span>
-        <span className="text-lg font-bold text-gray-400">Portal</span>
-      </div>
+      
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')

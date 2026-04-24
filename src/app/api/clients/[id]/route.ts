@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, pricing } = await req.json()
+  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, emailAlias, pricing } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
   try {
@@ -27,6 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         address: address?.trim() || null,
         www: www?.trim() || null,
         notes: notes?.trim() || null,
+          emailAlias: emailAlias?.trim() || null,
       },
     })
 

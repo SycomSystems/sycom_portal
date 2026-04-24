@@ -69,6 +69,7 @@ model Client {
   stockMovements StockMovement[]
   manualHours    ManualHours[]
   @@map("clients")
+  emailAlias     String?         @unique
 }
 
 model ClientPricing {
@@ -340,4 +341,11 @@ model SerialNumber {
   stockItem     StockItem  @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
 
   @@map("serial_numbers")
+}
+
+model Setting {
+  key   String @id
+  value String @db.Text
+
+  @@map("settings")
 }

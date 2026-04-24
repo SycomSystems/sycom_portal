@@ -44,9 +44,9 @@ export default function TicketsPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-5xl mx-auto py-8 px-6">
+      <div className="w-full py-2 px-5">
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Tikety</h1>
             <p className="text-sm text-gray-500 mt-0.5">{data?.total ?? 0} tikety celkom</p>
@@ -57,7 +57,7 @@ export default function TicketsPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5 space-y-3">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-3 space-y-3">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -102,7 +102,7 @@ export default function TicketsPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-gray-400">Načítavam...</td></tr>
+                <tr><td colSpan={7} className="px-5 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
               ) : (data?.tickets ?? []).length === 0 ? (
                 <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
               ) : (data?.tickets ?? []).map((t: any) => (
@@ -110,8 +110,8 @@ export default function TicketsPage() {
                   <td className="px-5 py-3.5">
                     <span className="font-mono text-xs text-sycom-500 font-semibold">#T-{t.ticketNumber}</span>
                   </td>
-                  <td className="px-5 py-3.5 max-w-[200px]">
-                    <p className="text-sm font-semibold text-gray-800 truncate">{t.subject}</p>
+                  <td className="px-5 py-3.5 max-w-[280px]">
+                    <Link href={`/tickets/${t.id}`} className="text-sm font-semibold text-gray-800 hover:text-sycom-600 transition-colors truncate block">{t.subject}</Link>
                   </td>
                   <td className="px-5 py-3.5">
                     {t.client?.name ? (
@@ -134,12 +134,6 @@ export default function TicketsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-gray-400">{formatDateTime(t.createdAt)}</td>
-                  <td className="px-5 py-3.5">
-                    <Link href={`/tickets/${t.id}`}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-sycom-500 hover:text-sycom-700 transition-colors">
-                      <Eye size={13} /> Zobraziť
-                    </Link>
-                  </td>
                 </tr>
               ))}
             </tbody>
