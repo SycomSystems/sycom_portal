@@ -19,11 +19,11 @@ interface ClientPricing { id: string; hoursType: HoursType; pricePerHour: number
 interface Client {
   id: string; name: string; contactPerson: string | null; phone: string | null
   ico: string | null; dic: string | null; dicDph: string | null
-  address: string | null; www: string | null; notes: string | null
+  address: string | null; www: string | null; notes: string | null; emailAlias: string | null
   createdAt: string; pricing: ClientPricing[]; _count: { users: number }
 }
 const emptyPricing = (): PricingMap => Object.fromEntries(HOURS_TYPES.map(t => [t, ''])) as PricingMap
-const emptyForm = () => ({ name: '', contactPerson: '', phone: '', ico: '', dic: '', dicDph: '', address: '', www: '', notes: '', pricing: emptyPricing() })
+const emptyForm = () => ({ name: '', contactPerson: '', phone: '', ico: '', dic: '', dicDph: '', address: '', www: '', notes: '', emailAlias: '', pricing: emptyPricing() })
 type FormState = ReturnType<typeof emptyForm>
 
 function PricingTable({ pricing, setPricing }: { pricing: PricingMap; setPricing: (p: PricingMap) => void }) {
@@ -103,6 +103,12 @@ function FormFields({ form, setForm }: { form: FormState; setForm: (f: FormState
         <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2}
           className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100 resize-none" />
       </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Email alias</label>
+        <input type="email" value={form.emailAlias ?? ''} onChange={e => setForm({ ...form, emailAlias: e.target.value })} placeholder="ll@sycom.sk"
+          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
+        <p className="text-xs text-gray-400 mt-1">Alias pre auto-tikety z e-mailov</p>
+      </div>
       <PricingTable pricing={form.pricing} setPricing={p => setForm({ ...form, pricing: p })} />
     </div>
   )
@@ -170,7 +176,7 @@ export default function ClientsPage() {
 
   const startEdit = (client: Client) => {
     setEditId(client.id)
-    setEditForm({ name: client.name, contactPerson: client.contactPerson ?? '', phone: client.phone ?? '', ico: client.ico ?? '', dic: client.dic ?? '', dicDph: client.dicDph ?? '', address: client.address ?? '', www: client.www ?? '', notes: client.notes ?? '', pricing: pricingToMap(client.pricing) })
+    setEditForm({ name: client.name, contactPerson: client.contactPerson ?? '', phone: client.phone ?? '', ico: client.ico ?? '', dic: client.dic ?? '', dicDph: client.dicDph ?? '', address: client.address ?? '', www: client.www ?? '', notes: client.notes ?? '', emailAlias: client.emailAlias ?? '', pricing: pricingToMap(client.pricing) })
     setExpandedId(client.id)
   }
 
