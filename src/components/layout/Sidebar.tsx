@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug } from 'lucide-react'
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
 
@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
+  { href: '/admin/debug', label: 'Debug', icon: <Bug size={16} />, roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {
