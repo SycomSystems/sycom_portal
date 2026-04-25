@@ -145,26 +145,6 @@ export default function TicketDetailPage() {
     })
   }
 
-  if (isLoading) return <PortalLayout><div className="flex items-center justify-center h-64 text-gray-400">Nacitavam...</div>
-
-    </PortalLayout>
-  if (!ticket || ticket.error) return (
-    <PortalLayout>
-      <div className="max-w-3xl mx-auto py-8 px-6 text-center">
-        <p className="text-gray-500">Tiket sa nenasel.</p>
-        <button onClick={() => router.back()} className="mt-4 text-sm text-sycom-500 hover:underline">← Spat</button>
-      </div>
-    </PortalLayout>
-  )
-
-  const isStaff = role === 'ADMIN' || role === 'AGENT'
-  const isAdmin = role === 'ADMIN'
-  const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
-  const slaWarn = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
-  const totalHours = ticket.totalWorkedHours ?? 0
-  const isResolved = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
-  const clientName = ticket.client?.name
-
   // ── Spotrebovaný materiál ──────────────────────────────────────────────
   const [stockUsages, setStockUsages] = useState<any[]>([])
   const [stockUsageLoading, setStockUsageLoading] = useState(false)
@@ -242,6 +222,27 @@ export default function TicketDetailPage() {
     else alert('Chyba pri odstraňovaní')
   }
   // ── END Spotrebovaný materiál ──────────────────────────────────────────
+
+  if (isLoading) return <PortalLayout><div className="flex items-center justify-center h-64 text-gray-400">Nacitavam...</div>
+
+    </PortalLayout>
+  if (!ticket || ticket.error) return (
+    <PortalLayout>
+      <div className="max-w-3xl mx-auto py-8 px-6 text-center">
+        <p className="text-gray-500">Tiket sa nenasel.</p>
+        <button onClick={() => router.back()} className="mt-4 text-sm text-sycom-500 hover:underline">← Spat</button>
+      </div>
+    </PortalLayout>
+  )
+
+  const isStaff = role === 'ADMIN' || role === 'AGENT'
+  const isAdmin = role === 'ADMIN'
+  const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
+  const slaWarn = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
+  const totalHours = ticket.totalWorkedHours ?? 0
+  const isResolved = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
+  const clientName = ticket.client?.name
+
 
 
   return (
