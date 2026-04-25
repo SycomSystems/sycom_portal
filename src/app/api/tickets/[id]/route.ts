@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/notifications'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -133,6 +134,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
   }).catch(() => {})
+
+  // In-app notifikacie
+  if (commentBody && !isInternal) {
+    if (updated.creatorId && updated.creatorId !== userId) {
+      createNotification(updated.creatorId, 'TICKET_COMMENT',
+        `Novy komentar na tikete #${updated.ticketNumber}: ${updated.subject}`, updated.id).catch(() => {})
+    }
+    if (updated.assigneeId && updated.assigneeId !== userId) {
+      createNotification(updated.assigneeId, 'TICKET_COMMENT',
+        `Novy komentar na tikete #${updated.ticketNumber}: ${updated.subject}`, updated.id).catch(() => {})
+    }
+  }
+  if (status && status !== ticket.status) {
+    if (updated.creatorId && updated.creatorId !== userId) {
+      createNotification(updated.creatorId, 'TICKET_STATUS',
+        `Stav tiketu #${updated.ticketNumber} zmeneny na: ${status}`, updated.id).catch(() => {})
+    }
+  }
+  if (assigneeId && assigneeId !== ticket.assigneeId && updated.assigneeId) {
+    createNotification(updated.assigneeId, 'TICKET_ASSIGNED',
+      `Bol ti prideleny tiket #${updated.ticketNumber}: ${updated.subject}`, updated.id).catch(() => {})
+  }
+
   return NextResponse.json(updated)
 }
 
