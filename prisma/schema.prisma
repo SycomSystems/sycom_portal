@@ -70,6 +70,7 @@ model Client {
   manualHours    ManualHours[]
   @@map("clients")
   emailAlias     String?         @unique
+  technicians    ClientTechnician[]
 }
 
 model ClientPricing {
@@ -189,6 +190,7 @@ model User {
   stockMovements  StockMovement[]
   manualHours     ManualHours[]
   @@map("users")
+  assignedClients ClientTechnician[]
 }
 
 model Session {
@@ -348,4 +350,14 @@ model Setting {
   value String @db.Text
 
   @@map("settings")
+}
+
+model ClientTechnician {
+  clientId String
+  userId   String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, userId])
+  @@map("client_technicians")
 }

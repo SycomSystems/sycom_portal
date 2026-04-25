@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const roleFilter = req.nextUrl.searchParams.get('role')
   const users = await prisma.user.findMany({
+    where: roleFilter ? { role: roleFilter as any } : undefined,
     orderBy: { name: 'asc' },
     select: {
       id: true, name: true, email: true, role: true,

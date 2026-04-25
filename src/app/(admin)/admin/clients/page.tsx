@@ -20,7 +20,7 @@ interface Client {
   id: string; name: string; contactPerson: string | null; phone: string | null
   ico: string | null; dic: string | null; dicDph: string | null
   address: string | null; www: string | null; notes: string | null; emailAlias: string | null
-  createdAt: string; pricing: ClientPricing[]; _count: { users: number }
+  createdAt: string; pricing: ClientPricing[]; _count: { users: number }; technicians?: { userId: string; user: { id: string; name: string } }[]
 }
 const emptyPricing = (): PricingMap => Object.fromEntries(HOURS_TYPES.map(t => [t, ''])) as PricingMap
 const emptyForm = () => ({ name: '', contactPerson: '', phone: '', ico: '', dic: '', dicDph: '', address: '', www: '', notes: '', emailAlias: '', pricing: emptyPricing() })
@@ -52,7 +52,7 @@ function PricingTable({ pricing, setPricing }: { pricing: PricingMap; setPricing
   )
 }
 
-function FormFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+function FormFields({ form, setForm, agentUsers = [], techs = [], setTechs = () => {} }: { form: FormState; setForm: (f: FormState) => void; agentUsers?: { id: string; name: string }[]; techs?: string[]; setTechs?: (t: string[]) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
@@ -109,6 +109,23 @@ function FormFields({ form, setForm }: { form: FormState; setForm: (f: FormState
           className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
         <p className="text-xs text-gray-400 mt-1">Alias pre auto-tikety z e-mailov</p>
       </div>
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-medium text-gray-500 mb-2">Zodpovední technici</label>
+        {agentUsers.length === 0 ? (
+          <p className="text-xs text-gray-400">Žiadni technici k dispozícii</p>
+        ) : (
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {agentUsers.map(u => (
+              <label key={u.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={techs.includes(u.id)}
+                  onChange={e => setTechs(e.target.checked ? [...techs, u.id] : techs.filter(i => i !== u.id))}
+                  className="rounded border-gray-300" />
+                {u.name}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
       <PricingTable pricing={form.pricing} setPricing={p => setForm({ ...form, pricing: p })} />
     </div>
   )
@@ -132,12 +149,18 @@ export default function ClientsPage() {
   const [editForm, setEditForm] = useState(emptyForm())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [agentUsers, setAgentUsers] = useState<{ id: string; name: string }[]>([])
+  const [newTechs, setNewTechs] = useState<string[]>([])
+  const [editTechs, setEditTechs] = useState<string[]>([])
 
   const load = () => {
     setLoading(true)
     fetch('/api/clients').then(r => r.json()).then(data => { setClients(data); setLoading(false) }).catch(() => setLoading(false))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    fetch('/api/users?role=AGENT').then(r => r.json()).then(d => setAgentUsers(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
 
   const showStatus = (type: 'success' | 'error', message: string) => {
     setStatus({ type, message }); setTimeout(() => setStatus(null), 4000)
@@ -147,10 +170,10 @@ export default function ClientsPage() {
     if (!newForm.name.trim()) return
     setAdding(true)
     try {
-      const res = await fetch('/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newForm, pricing: pricingForApi(newForm.pricing) }) })
+      const res = await fetch('/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newForm, pricing: pricingForApi(newForm.pricing), technicianIds: newTechs }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Chyba')
-      setNewForm(emptyForm()); load(); showStatus('success', 'Klient ' + data.name + ' bol pridany.')
+      setNewForm(emptyForm()); setNewTechs([]); load(); showStatus('success', 'Klient ' + data.name + ' bol pridany.')
     } catch (e: any) { showStatus('error', e.message) }
     finally { setAdding(false) }
   }
@@ -158,7 +181,7 @@ export default function ClientsPage() {
   const handleEdit = async (id: string) => {
     if (!editForm.name.trim()) return
     try {
-      const res = await fetch('/api/clients/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editForm, pricing: pricingForApi(editForm.pricing) }) })
+      const res = await fetch('/api/clients/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editForm, pricing: pricingForApi(editForm.pricing), technicianIds: editTechs }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Chyba')
       setEditId(null); load(); showStatus('success', 'Klient ' + data.name + ' bol upraveny.')
@@ -178,6 +201,7 @@ export default function ClientsPage() {
     setEditId(client.id)
     setEditForm({ name: client.name, contactPerson: client.contactPerson ?? '', phone: client.phone ?? '', ico: client.ico ?? '', dic: client.dic ?? '', dicDph: client.dicDph ?? '', address: client.address ?? '', www: client.www ?? '', notes: client.notes ?? '', emailAlias: client.emailAlias ?? '', pricing: pricingToMap(client.pricing) })
     setExpandedId(client.id)
+    setEditTechs((client.technicians || []).map(t => t.userId))
   }
 
   const getPriceMap = (client: Client) => {
@@ -198,7 +222,7 @@ export default function ClientsPage() {
             <h2 className="text-base font-semibold text-gray-900">Pridat noveho klienta</h2>
           </div>
           <div className="p-4 space-y-4">
-            <FormFields form={newForm} setForm={setNewForm} />
+            <FormFields form={newForm} setForm={setNewForm} agentUsers={agentUsers} techs={newTechs} setTechs={setNewTechs} />
             <div className="flex justify-end">
               <button onClick={handleAdd} disabled={adding || !newForm.name.trim()}
                 className="flex items-center gap-2 px-5 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
@@ -265,7 +289,7 @@ export default function ClientsPage() {
                     <div className="px-6 pb-5 bg-gray-50 border-t border-gray-100">
                       {editId === client.id ? (
                         <div className="pt-4 space-y-4">
-                          <FormFields form={editForm} setForm={setEditForm} />
+                          <FormFields form={editForm} setForm={setEditForm} agentUsers={agentUsers} techs={editTechs} setTechs={setEditTechs} />
                           <div className="flex items-center gap-2 justify-end">
                             <button onClick={() => setEditId(null)}
                               className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors">

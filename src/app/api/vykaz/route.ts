@@ -28,6 +28,12 @@ export async function GET(req: NextRequest) {
   // 1. Ticket comments with worked hours
   const commentWhere: any = { workedHours: { gt: 0 }, createdAt: { gte: dateFrom, lte: dateTo } }
   if (clientId) commentWhere.ticket = { clientId }
+  let agentClientIds: string[] = []
+  if (role === 'AGENT') {
+    const a = await prisma.clientTechnician.findMany({ where: { userId: (session.user as any).id }, select: { clientId: true } })
+    agentClientIds = a.map(x => x.clientId)
+    if (!clientId) commentWhere.ticket = { clientId: { in: agentClientIds } }
+  }
   const comments = await prisma.comment.findMany({
     where: commentWhere,
     include: {
@@ -40,6 +46,7 @@ export async function GET(req: NextRequest) {
   // 2. Manual hours entries
   const manualWhere: any = { date: { gte: dateFrom, lte: dateTo } }
   if (clientId) manualWhere.clientId = clientId
+  if (role === 'AGENT' && !clientId) manualWhere.clientId = { in: agentClientIds }
   const manualHours = await prisma.manualHours.findMany({
     where: manualWhere,
     include: {

@@ -11,6 +11,11 @@ export async function GET(req: NextRequest) {
   const role = (session.user as any).role
   if (role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  let agentCF: any = {}
+  if (role === 'AGENT') {
+    const a = await prisma.clientTechnician.findMany({ where: { userId: (session.user as any).id }, select: { clientId: true } })
+    agentCF = { clientId: { in: a.map(x => x.clientId) } }
+  }
   const now       = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const weekStart  = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7)
@@ -29,11 +34,11 @@ export async function GET(req: NextRequest) {
     avgResolutionRaw,
     slaBreached,
   ] = await Promise.all([
-    prisma.ticket.count({ where: { status: 'OPEN' } }),
-    prisma.ticket.count({ where: { status: 'IN_PROGRESS' } }),
-    prisma.ticket.count({ where: { status: 'RESOLVED', resolvedAt: { gte: todayStart } } }),
-    prisma.ticket.count({ where: { status: 'OPEN', priority: 'CRITICAL' } }),
-    prisma.ticket.count({ where: { createdAt: { gte: monthStart } } }),
+    prisma.ticket.count({ where: { status: 'OPEN', ...agentCF } }),
+    prisma.ticket.count({ where: { status: 'IN_PROGRESS', ...agentCF } }),
+    prisma.ticket.count({ where: { status: 'RESOLVED', resolvedAt: { gte: todayStart }, ...agentCF } }),
+    prisma.ticket.count({ where: { status: 'OPEN', priority: 'CRITICAL', ...agentCF } }),
+    prisma.ticket.count({ where: { createdAt: { gte: monthStart }, ...agentCF } }),
 
     prisma.ticket.groupBy({ by: ['status'],   _count: true }),
     prisma.ticket.groupBy({ by: ['priority'], _count: true }),
