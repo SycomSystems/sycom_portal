@@ -125,6 +125,7 @@ model StockItem {
   serialTracking    Boolean   @default(false)
   supplierPrices    SupplierPrice[]
   serialNumbers     SerialNumber[]
+  ticketUsages      TicketStockUsage[]
   @@map("stock_items")
 }
 
@@ -190,8 +191,9 @@ model User {
   stockMovements  StockMovement[]
   manualHours     ManualHours[]
   @@map("users")
-  assignedClients ClientTechnician[]
-  auditLogs       AuditLog[]
+  assignedClients      ClientTechnician[]
+  auditLogs            AuditLog[]
+  stockUsagesCreated   TicketStockUsage[]
 }
 
 model Session {
@@ -251,6 +253,7 @@ model Ticket {
   comments      Comment[]
   attachments   Attachment[]
   notifications Notification[]
+  stockUsages   TicketStockUsage[]
   @@map("tickets")
 }
 
@@ -399,4 +402,20 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model TicketStockUsage {
+  id          String    @id @default(cuid())
+  ticketId    String
+  stockItemId String
+  qty         Float
+  note        String?
+  createdAt   DateTime  @default(now())
+  createdById String
+
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@map("ticket_stock_usages")
 }

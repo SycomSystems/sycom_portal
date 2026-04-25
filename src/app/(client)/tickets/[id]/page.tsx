@@ -145,7 +145,134 @@ export default function TicketDetailPage() {
     })
   }
 
-  if (isLoading) return <PortalLayout><div className="flex items-center justify-center h-64 text-gray-400">Nacitavam...</div></PortalLayout>
+  if (isLoading) return <PortalLayout><div className="flex items-center justify-center h-64 text-gray-400">Nacitavam...</div>
+          {/* ── Spotrebovaný materiál ─────────────────────────────────── */}
+          <div className="bg-white rounded-lg border border-gray-200 p-5 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">Spotrebovaný materiál</h3>
+              {(session?.user?.role === 'AGENT' || session?.user?.role === 'ADMIN') && !showAddUsage && (
+                <button
+                  onClick={() => setShowAddUsage(true)}
+                  className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  + Pridať položku
+                </button>
+              )}
+            </div>
+
+            {/* Add form */}
+            {showAddUsage && (
+              <div className="border border-blue-200 rounded-lg p-4 mb-4 bg-blue-50">
+                <p className="text-xs font-medium text-gray-700 mb-2">Nová položka zo skladu</p>
+                <div className="relative mb-2">
+                  <input
+                    type="text"
+                    placeholder="Hľadať položku..."
+                    value={usageItemSearch}
+                    onChange={e => searchStockItems(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  {usageItemResults.length > 0 && (
+                    <ul className="absolute z-10 bg-white border border-gray-200 rounded shadow-md w-full mt-1 max-h-48 overflow-y-auto text-sm">
+                      {usageItemResults.map((item: any) => (
+                        <li
+                          key={item.id}
+                          onClick={() => { setUsageItemSelected(item); setUsageItemSearch(item.name); setUsageItemResults([]) }}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                        >
+                          <span className="font-medium">{item.name}</span>
+                          <span className="text-gray-400 text-xs ml-2">({item.sku})</span>
+                          <span className="float-right text-gray-500 text-xs">{item.currentStock} {item.unit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="Množstvo"
+                    value={usageQty}
+                    onChange={e => setUsageQty(e.target.value)}
+                    className="w-28 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  {usageItemSelected && (
+                    <span className="text-xs text-gray-500 self-center">{usageItemSelected.unit}</span>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Poznámka (voliteľné)"
+                    value={usageNote}
+                    onChange={e => setUsageNote(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+                {usageError && <p className="text-red-600 text-xs mb-2">{usageError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddUsage}
+                    disabled={usageSubmitting}
+                    className="bg-blue-600 text-white text-xs px-4 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {usageSubmitting ? 'Ukladám...' : 'Pridať'}
+                  </button>
+                  <button
+                    onClick={() => { setShowAddUsage(false); setUsageError(''); setUsageItemSearch(''); setUsageItemResults([]); setUsageItemSelected(null); setUsageQty(''); setUsageNote('') }}
+                    className="text-xs px-4 py-1.5 rounded border border-gray-300 hover:bg-gray-50"
+                  >
+                    Zrušiť
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* List */}
+            {stockUsageLoading ? (
+              <p className="text-xs text-gray-400">Načítavam...</p>
+            ) : stockUsages.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">Žiadny materiál nebol spotrebovaný</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b">
+                    <th className="text-left pb-1">Položka</th>
+                    <th className="text-left pb-1">SKU</th>
+                    <th className="text-right pb-1">Množstvo</th>
+                    <th className="text-left pb-1 pl-3">Poznámka</th>
+                    <th className="text-left pb-1 pl-3">Pridal</th>
+                    {session?.user?.role === 'ADMIN' && <th className="w-8"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockUsages.map((u: any) => (
+                    <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-1.5 font-medium">{u.stockItem?.name ?? '—'}</td>
+                      <td className="py-1.5 text-gray-500 text-xs">{u.stockItem?.sku ?? ''}</td>
+                      <td className="py-1.5 text-right font-mono">{u.qty} {u.stockItem?.unit ?? ''}</td>
+                      <td className="py-1.5 pl-3 text-gray-600">{u.note ?? ''}</td>
+                      <td className="py-1.5 pl-3 text-gray-500 text-xs">{u.createdBy?.name ?? u.createdBy?.email ?? '—'}</td>
+                      {session?.user?.role === 'ADMIN' && (
+                        <td className="py-1.5 text-right">
+                          <button
+                            onClick={() => handleDeleteUsage(u.id)}
+                            className="text-red-400 hover:text-red-600 p-0.5"
+                            title="Odstrániť a vrátiť na sklad"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {/* ── END Spotrebovaný materiál ──────────────────────────────── */}
+
+    </PortalLayout>
   if (!ticket || ticket.error) return (
     <PortalLayout>
       <div className="max-w-3xl mx-auto py-8 px-6 text-center">
@@ -162,6 +289,85 @@ export default function TicketDetailPage() {
   const totalHours = ticket.totalWorkedHours ?? 0
   const isResolved = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
   const clientName = ticket.client?.name
+
+  // ── Spotrebovaný materiál ──────────────────────────────────────────────
+  const [stockUsages, setStockUsages] = useState<any[]>([])
+  const [stockUsageLoading, setStockUsageLoading] = useState(false)
+  const [showAddUsage, setShowAddUsage] = useState(false)
+  const [usageItemSearch, setUsageItemSearch] = useState('')
+  const [usageItemResults, setUsageItemResults] = useState<any[]>([])
+  const [usageItemSelected, setUsageItemSelected] = useState<any>(null)
+  const [usageQty, setUsageQty] = useState('')
+  const [usageNote, setUsageNote] = useState('')
+  const [usageSubmitting, setUsageSubmitting] = useState(false)
+  const [usageError, setUsageError] = useState('')
+
+  const fetchStockUsages = async () => {
+    setStockUsageLoading(true)
+    try {
+      const res = await fetch(`/api/tickets/${params.id}/stock-usage`)
+      if (res.ok) {
+        const data = await res.json()
+        setStockUsages(data.usages ?? [])
+      }
+    } finally {
+      setStockUsageLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (params.id) fetchStockUsages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id])
+
+  const searchStockItems = async (q: string) => {
+    setUsageItemSearch(q)
+    setUsageItemSelected(null)
+    if (q.length < 2) { setUsageItemResults([]); return }
+    const res = await fetch(`/api/stock/items?search=${encodeURIComponent(q)}&limit=10`)
+    if (res.ok) {
+      const data = await res.json()
+      setUsageItemResults(data.items ?? [])
+    }
+  }
+
+  const handleAddUsage = async () => {
+    if (!usageItemSelected) { setUsageError('Vyberte položku zo skladu'); return }
+    const qty = parseFloat(usageQty)
+    if (!qty || qty <= 0) { setUsageError('Zadajte platné množstvo'); return }
+    setUsageError('')
+    setUsageSubmitting(true)
+    try {
+      const res = await fetch(`/api/tickets/${params.id}/stock-usage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stockItemId: usageItemSelected.id, qty, note: usageNote }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setUsageError(err.error ?? 'Chyba pri pridávaní')
+      } else {
+        setShowAddUsage(false)
+        setUsageItemSearch('')
+        setUsageItemResults([])
+        setUsageItemSelected(null)
+        setUsageQty('')
+        setUsageNote('')
+        fetchStockUsages()
+      }
+    } finally {
+      setUsageSubmitting(false)
+    }
+  }
+
+  const handleDeleteUsage = async (usageId: string) => {
+    if (!confirm('Odstrániť túto položku a vrátiť ju na sklad?')) return
+    const res = await fetch(`/api/tickets/${params.id}/stock-usage/${usageId}`, { method: 'DELETE' })
+    if (res.ok) fetchStockUsages()
+    else alert('Chyba pri odstraňovaní')
+  }
+  // ── END Spotrebovaný materiál ──────────────────────────────────────────
+
 
   return (
     <PortalLayout>
