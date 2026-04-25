@@ -162,3 +162,37 @@ export async function sendNewComment(
     console.error('[email] sendNewComment failed:', err.message)
   }
 }
+
+export async function sendTicketStatusChanged(
+  toEmail: string,
+  opts: { ticketNumber: number; subject: string; newStatus: string }
+) {
+  const statusLabels: Record<string, string> = {
+    IN_PROGRESS: 'V rieseni',
+    RESOLVED:    'Vyrieseny',
+    CLOSED:      'Uzavrety',
+    OPEN:        'Otvoreny',
+  }
+  try {
+    const cfg = await getSmtpConfig()
+    const transporter = await createTransporter()
+    await transporter.sendMail({
+      from:    cfg.from,
+      to:      toEmail,
+      subject: `[Tiket #${opts.ticketNumber}] Zmena stavu: ${statusLabels[opts.newStatus] ?? opts.newStatus}`,
+      text: [
+        'Dobry den,',
+        '',
+        `Stav Vasho tiketu #${opts.ticketNumber} bol zmeneny.`,
+        '',
+        `Predmet:   ${opts.subject}`,
+        `Novy stav: ${statusLabels[opts.newStatus] ?? opts.newStatus}`,
+        '',
+        'S pozdravom,',
+        'Sycom Systems',
+      ].join('\n'),
+    })
+  } catch (err: any) {
+    console.error('[email] sendTicketStatusChanged failed:', err.message)
+  }
+}
