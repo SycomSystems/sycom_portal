@@ -1,7 +1,7 @@
 'use client'
 // src/app/(admin)/settings/page.tsx
 import { useState, useRef, useEffect } from 'react'
-import PortalLayout from '@/components/layout/PortalLayout'
+import { PortalLayout } from '@/components/layout/PortalLayout'
 import {
   Upload, CheckCircle, AlertCircle, ImageIcon, Trash2,
   Phone, Save, Mail, Server, Lock, Eye, EyeOff, ToggleLeft, ToggleRight,
