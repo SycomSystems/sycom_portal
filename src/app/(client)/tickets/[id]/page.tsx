@@ -163,7 +163,7 @@ export default function TicketDetailPage() {
       const res = await fetch(`/api/tickets/${id}/stock-usage`)
       if (res.ok) {
         const data = await res.json()
-        setStockUsages(data.usages ?? [])
+        setStockUsages(Array.isArray(data) ? data : (data.usages ?? []))
       }
     } finally {
       setStockUsageLoading(false)
@@ -182,7 +182,7 @@ export default function TicketDetailPage() {
     const res = await fetch(`/api/stock/items?search=${encodeURIComponent(q)}&limit=10`)
     if (res.ok) {
       const data = await res.json()
-      setUsageItemResults(data.items ?? [])
+      setUsageItemResults(Array.isArray(data) ? data : (data.items ?? []))
     }
   }
 
