@@ -370,3 +370,15 @@ model AllowedDomain {
 
   @@map("allowed_domains")
 }
+
+model SmtpSettings {
+  id      Int     @id @default(1)
+  host    String  @default("")
+  port    Int     @default(587)
+  secure  Boolean @default(false)
+  user    String  @default("")
+  pass    String  @default("")
+  from    String  @default("")
+
+  @@map("smtp_settings")
+}
