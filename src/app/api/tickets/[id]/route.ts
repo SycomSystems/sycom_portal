@@ -98,12 +98,39 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       team: { select: { id: true, name: true } },
     },
   })
-  import('@/lib/email').then(({ sendTicketAssigned, sendTicketResolved }) => {
+  import('@/lib/email').then(({ sendTicketAssigned, sendTicketResolved, sendTicketStatusChanged, sendNewComment }) => {
+    // Zmena assignee
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
       sendTicketAssigned(updated.assignee.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, agentName: updated.assignee.name ?? '' }).catch(() => {})
     }
+    // Zmena stavu — RESOLVED
     if (isResolving && updated.creator?.email) {
       sendTicketResolved(updated.creator.email, { ticketNumber: updated.ticketNumber, subject: updated.subject }).catch(() => {})
+    }
+    // Zmena stavu — IN_PROGRESS alebo CLOSED
+    const statusChanged = status && status !== ticket.status && status !== 'RESOLVED'
+    if (statusChanged && (status === 'IN_PROGRESS' || status === 'CLOSED') && updated.creator?.email) {
+      sendTicketStatusChanged(updated.creator.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status }).catch(() => {})
+    }
+    // Novy komentar — notifikovat druhú stranu (len verejny)
+    if (commentBody && !isInternal) {
+      const authorId = (updated as any).authorId
+      const recipients: { email: string; name: string }[] = []
+      if (updated.creator?.email && updated.creator.id !== userId) {
+        recipients.push({ email: updated.creator.email, name: updated.creator.name ?? '' })
+      }
+      if (updated.assignee?.email && updated.assignee.id !== userId) {
+        recipients.push({ email: updated.assignee.email, name: updated.assignee.name ?? '' })
+      }
+      if (recipients.length > 0) {
+        const authorName = (session.user as any).name ?? 'Neznamy'
+        sendNewComment(recipients, {
+          ticketNumber: updated.ticketNumber,
+          subject: updated.subject,
+          commentAuthor: authorName,
+          commentText: commentBody,
+        }).catch(() => {})
+      }
     }
   }).catch(() => {})
   return NextResponse.json(updated)

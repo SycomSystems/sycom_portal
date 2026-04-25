@@ -118,16 +118,29 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  if (ticket.creator?.email) {
-    import('@/lib/email').then(({ sendTicketCreated }) => {
+  import('@/lib/email').then(async ({ sendTicketCreated, sendTicketAssigned }) => {
+    if (ticket.creator?.email) {
       sendTicketCreated(ticket.creator!.email!, {
         ticketNumber: ticket.ticketNumber,
         subject:      ticket.subject,
         priority:     ticket.priority,
         category:     ticket.category,
       }).catch(() => {})
-    }).catch(() => {})
-  }
+    }
+    if (resolvedAssigneeId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: resolvedAssigneeId },
+        select: { email: true, name: true },
+      })
+      if (assignee?.email) {
+        sendTicketAssigned(assignee.email, {
+          ticketNumber: ticket.ticketNumber,
+          subject:      ticket.subject,
+          agentName:    assignee.name ?? '',
+        }).catch(() => {})
+      }
+    }
+  }).catch(() => {})
 
   return NextResponse.json(ticket, { status: 201 })
 }
