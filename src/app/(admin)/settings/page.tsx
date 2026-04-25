@@ -5,7 +5,7 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import {
   Upload, CheckCircle, AlertCircle, ImageIcon, Trash2,
   Phone, Save, Mail, Server, Lock, Eye, EyeOff, ToggleLeft, ToggleRight,
-  Shield, Plus, X,
+  Shield, Plus, X, Send, Zap,
 } from 'lucide-react'
 
 type AllowedDomain = { id: string; domain: string; note: string | null; createdAt: string }
@@ -38,10 +38,22 @@ export default function SettingsPage() {
   const [imapUser, setImapUser] = useState('')
   const [imapPass, setImapPass] = useState('')
   const [imapEnabled, setImapEnabled] = useState(false)
-  const [showPass, setShowPass] = useState(false)
+  const [showImapPass, setShowImapPass] = useState(false)
   const [emailLoading, setEmailLoading] = useState(false)
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [testingConn, setTestingConn] = useState(false)
+
+  // --- SMTP state ---
+  const [smtpHost, setSmtpHost] = useState('')
+  const [smtpPort, setSmtpPort] = useState('587')
+  const [smtpSecure, setSmtpSecure] = useState(false)
+  const [smtpUser, setSmtpUser] = useState('')
+  const [smtpPass, setSmtpPass] = useState('')
+  const [smtpFrom, setSmtpFrom] = useState('')
+  const [showSmtpPass, setShowSmtpPass] = useState(false)
+  const [smtpLoading, setSmtpLoading] = useState(false)
+  const [smtpStatus, setSmtpStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [testingSmtp, setTestingSmtp] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings/logo')
@@ -71,6 +83,18 @@ export default function SettingsPage() {
     fetch('/api/admin/allowed-domains')
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setDomains(data) })
+      .catch(() => {})
+
+    fetch('/api/admin/smtp-settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.host) setSmtpHost(data.host)
+        if (data.port) setSmtpPort(String(data.port))
+        if (data.secure !== undefined) setSmtpSecure(data.secure)
+        if (data.user) setSmtpUser(data.user)
+        if (data.pass) setSmtpPass(data.pass)
+        if (data.from) setSmtpFrom(data.from)
+      })
       .catch(() => {})
   }, [])
 
@@ -197,6 +221,66 @@ export default function SettingsPage() {
       setEmailStatus({ type: 'error', message: e.message })
     } finally {
       setTestingConn(false)
+    }
+  }
+
+  const handleSaveSmtp = async () => {
+    if (!smtpHost.trim() || !smtpUser.trim()) {
+      setSmtpStatus({ type: 'error', message: 'Vyplňte aspoň SMTP host a používateľa.' })
+      return
+    }
+    setSmtpLoading(true)
+    setSmtpStatus(null)
+    try {
+      const res = await fetch('/api/admin/smtp-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: parseInt(smtpPort) || 587,
+          secure: smtpSecure,
+          user: smtpUser,
+          pass: smtpPass,
+          from: smtpFrom || smtpUser,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Uloženie zlyhalo')
+      setSmtpStatus({ type: 'success', message: 'SMTP nastavenia boli uložené. Portál ich použije pri odosielaní e-mailov.' })
+    } catch (e: any) {
+      setSmtpStatus({ type: 'error', message: e.message })
+    } finally {
+      setSmtpLoading(false)
+    }
+  }
+
+  const handleTestSmtp = async () => {
+    if (!smtpHost.trim() || !smtpUser.trim()) {
+      setSmtpStatus({ type: 'error', message: 'Vyplňte SMTP host a používateľa pred testom.' })
+      return
+    }
+    setTestingSmtp(true)
+    setSmtpStatus(null)
+    try {
+      const res = await fetch('/api/admin/smtp-settings/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: parseInt(smtpPort) || 587,
+          secure: smtpSecure,
+          user: smtpUser,
+          pass: smtpPass,
+          from: smtpFrom || smtpUser,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Test zlyhал')
+      setSmtpStatus({ type: 'success', message: data.message || 'Test e-mail bol odoslaný úspešne.' })
+    } catch (e: any) {
+      setSmtpStatus({ type: 'error', message: e.message })
+    } finally {
+      setTestingSmtp(false)
     }
   }
 
@@ -434,7 +518,7 @@ export default function SettingsPage() {
                 <label className={labelClass}>Heslo</label>
                 <div className="relative">
                   <input
-                    type={showPass ? 'text' : 'password'}
+                    type={showImapPass ? 'text' : 'password'}
                     value={imapPass}
                     onChange={(e) => setImapPass(e.target.value)}
                     placeholder="••••••••"
@@ -442,10 +526,10 @@ export default function SettingsPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPass(!showPass)}
+                    onClick={() => setShowImapPass(!showImapPass)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showImapPass ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
@@ -482,6 +566,138 @@ export default function SettingsPage() {
               >
                 <Save size={15} />
                 {emailLoading ? 'Ukladám...' : 'Uložiť nastavenia'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── SMTP Server Section ── */}
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <Send size={16} className="text-sycom-500" />
+              SMTP Server (odosielanie e-mailov)
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Nastavenia pre odosielanie e-mailov (notifikácie, tikety, uvítacie správy).
+              Ak je vyplnené, má prednosť pred nastaveniami v .env súbore.
+            </p>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* SMTP Host */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelClass}>
+                  <Server size={11} className="inline mr-1" />
+                  SMTP Server (host)
+                </label>
+                <input
+                  type="text"
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="napr. smtp.office365.com"
+                  className={inputClass}
+                />
+              </div>
+
+              {/* SMTP Port + SSL */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelClass}>Port</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    placeholder="587"
+                    className="w-28 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sycom-300"
+                  />
+                  <button
+                    onClick={() => {
+                      setSmtpSecure(!smtpSecure)
+                      setSmtpPort(!smtpSecure ? '465' : '587')
+                    }}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${smtpSecure ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}
+                  >
+                    <Lock size={12} />
+                    {smtpSecure ? 'SSL/TLS' : 'STARTTLS'}
+                  </button>
+                </div>
+              </div>
+
+              {/* SMTP Username */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelClass}>Používateľ (e-mail)</label>
+                <input
+                  type="email"
+                  value={smtpUser}
+                  onChange={(e) => setSmtpUser(e.target.value)}
+                  placeholder="portal@sycom.sk"
+                  className={inputClass}
+                />
+              </div>
+
+              {/* SMTP Password */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelClass}>Heslo</label>
+                <div className="relative">
+                  <input
+                    type={showSmtpPass ? 'text' : 'password'}
+                    value={smtpPass}
+                    onChange={(e) => setSmtpPass(e.target.value)}
+                    placeholder="••••••••"
+                    className={`${inputClass} pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSmtpPass(!showSmtpPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showSmtpPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* From address */}
+              <div className="col-span-2">
+                <label className={labelClass}>Odosielateľ (From)</label>
+                <input
+                  type="email"
+                  value={smtpFrom}
+                  onChange={(e) => setSmtpFrom(e.target.value)}
+                  placeholder="Sycom Portal <portal@sycom.sk>"
+                  className={inputClass}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Ak nevyplníte, použije sa hodnota z poľa Používateľ.
+                </p>
+              </div>
+            </div>
+
+            {smtpStatus && (
+              <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-sm ${smtpStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                {smtpStatus.type === 'success' ? <CheckCircle size={15} className="mt-0.5 shrink-0" /> : <AlertCircle size={15} className="mt-0.5 shrink-0" />}
+                {smtpStatus.message}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                onClick={handleTestSmtp}
+                disabled={testingSmtp}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                <Zap size={14} />
+                {testingSmtp ? 'Testujem...' : 'Otestovať SMTP'}
+              </button>
+
+              <button
+                onClick={handleSaveSmtp}
+                disabled={smtpLoading}
+                className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
+              >
+                <Save size={15} />
+                {smtpLoading ? 'Ukladám...' : 'Uložiť nastavenia'}
               </button>
             </div>
           </div>
