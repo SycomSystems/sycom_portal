@@ -191,6 +191,7 @@ model User {
   manualHours     ManualHours[]
   @@map("users")
   assignedClients ClientTechnician[]
+  auditLogs       AuditLog[]
 }
 
 model Session {
@@ -381,4 +382,21 @@ model SmtpSettings {
   from    String  @default("")
 
   @@map("smtp_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  oldValue   String?  @db.Text
+  newValue   String?  @db.Text
+  userId     String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
