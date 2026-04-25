@@ -26,7 +26,7 @@ const emptyForm = {
 
 const ROLE_LABELS: Record<User['role'], string> = {
   ADMIN: 'Admin',
-  AGENT: 'Agent',
+  AGENT: 'Technik',
   CLIENT: 'Klient',
   CLIENT_MANAGER: 'Klient manažér',
 }
@@ -38,6 +38,14 @@ const ROLE_COLORS: Record<User['role'], string> = {
   CLIENT_MANAGER: 'bg-purple-100 text-purple-700',
 }
 
+
+const generatePassword = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const special = '!@#$'
+  let pwd = special[Math.floor(Math.random() * special.length)]
+  for (let i = 0; i < 9; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+  return pwd.split('').sort(() => Math.random() - 0.5).join('')
+}
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -103,6 +111,22 @@ export default function UsersPage() {
     load()
   }
 
+  const handleSendAndSave = async () => {
+    if (!editing) return
+    const pwd = form.password || generatePassword()
+    if (!form.password) setForm(f => ({ ...f, password: pwd }))
+    const res = await fetch(`/api/users/${editing.id}/send-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    })
+    if (res.ok) {
+      alert(`Heslo "${pwd}" bolo odoslané na ${editing.email}`)
+      await handleSave()
+    } else {
+      alert('Chyba pri odoslaní emailu')
+    }
+  }
   const handleSendPassword = async (u: User) => {
     await fetch(`/api/users/${u.id}/send-password`, { method: 'POST' })
     showFlash(`Heslo bolo odoslané na ${u.email}`)
@@ -120,14 +144,14 @@ export default function UsersPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-5xl mx-auto py-8 px-6">
+      <div className="w-full py-2 px-5">
         {flash && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-sm">
             <CheckCircle size={16} /> {flash}
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Používatelia</h1>
             <p className="text-sm text-gray-500 mt-0.5">{users.length} používateľov celkom</p>
@@ -150,7 +174,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">Načítavam...</td></tr>
+                <tr><td colSpan={5} className="px-5 py-4 text-center text-gray-400">Načítavam...</td></tr>
               ) : users.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3">
@@ -201,7 +225,7 @@ export default function UsersPage() {
               <h2 className="text-base font-semibold text-gray-900">{modal === 'create' ? 'Nový používateľ' : 'Upraviť používateľa'}</h2>
               <button onClick={() => setModal(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X size={16} /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Celé meno *</label>
@@ -213,14 +237,21 @@ export default function UsersPage() {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">{modal === 'edit' ? 'Nové heslo (nechajte prázdne pre zachovanie)' : 'Heslo *'}</label>
-                  <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" placeholder="••••••••" />
+                  <div className="flex gap-2">
+                    <input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100 font-mono" placeholder="••••••••" />
+                    <button type="button" onClick={() => { const p = generatePassword(); setForm(f => ({ ...f, password: p })) }}
+                      className="px-3 py-2 bg-sycom-50 border border-sycom-200 text-sycom-600 text-xs font-medium rounded-xl hover:bg-sycom-100 transition-colors whitespace-nowrap">
+                      Generovať
+                    </button>
+                  </div>
+                  {form.password && <p className="mt-1 text-xs text-sycom-600 font-mono bg-sycom-50 px-2 py-1 rounded-lg">Heslo: <span className="font-bold select-all">{form.password}</span></p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Rola</label>
                   <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as User['role'] }))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                     <option value="CLIENT">Klient</option>
                     <option value="CLIENT_MANAGER">Klient manažér</option>
-                    <option value="AGENT">Agent</option>
+                    <option value="AGENT">Technik</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
@@ -248,6 +279,12 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              {modal === 'edit' && form.password && (
+                <button type="button" onClick={handleSendAndSave}
+                  className="px-4 py-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium rounded-xl hover:bg-green-100 transition-colors">
+                  Odoslať heslo e-mailom
+                </button>
+              )}
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Zrušiť</button>
               <button onClick={handleSave} disabled={saving || !form.name || !form.email}
                 className="px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">

@@ -14,8 +14,8 @@ function StatCard({ label, value, icon, color, sub }: {
 }) {
   return (
     <div className="card">
-      <div className="h-[3px] w-full" style={{ background: color }} />
-      <div className="p-5 flex items-start gap-4">
+      <div className="h-[120px] w-full" style={{ background: color }} />
+      <div className="p-3 flex items-start gap-4">
         <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: color + '18' }}>
           <span style={{ color }}>{icon}</span>
@@ -48,10 +48,10 @@ export default function DashboardPage() {
   })
 
   const stats = [
-    { label: 'Otvorené tikety',      value: data?.totalOpen       ?? '—', icon: <Ticket size={20} />,       color: '#3b82f6', sub: 'celkom aktívnych' },
-    { label: 'Vyriešené dnes',       value: data?.resolvedToday   ?? '—', icon: <CheckCircle size={20} />,   color: '#10b981', sub: 'dnes uzatvorených' },
-    { label: 'Priemerný čas',        value: data?.avgResolutionTime ?? '—', icon: <Clock size={20} />,       color: '#8b5cf6', sub: 'hodín na vyriešenie' },
-    { label: 'Kritické tikety',      value: data?.criticalOpen    ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'vyžaduje pozornosť' },
+    { label: 'Otvorené tikety',      value: data?.summary?.totalOpen       ?? '—', icon: <Ticket size={20} />,       color: '#3b82f6', sub: 'celkom aktívnych' },
+    { label: 'Vyriešené dnes',       value: data?.summary?.resolvedToday   ?? '—', icon: <CheckCircle size={20} />,   color: '#10b981', sub: 'dnes uzatvorených' },
+    { label: 'Priemerný čas',        value: data?.summary?.avgResolutionHours ?? '—', icon: <Clock size={20} />,       color: '#8b5cf6', sub: 'hodín na vyriešenie' },
+    { label: 'Kritické tikety',      value: data?.summary?.criticalOpen    ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'vyžaduje pozornosť' },
   ]
 
   const PRIORITY_COLORS: Record<string, string> = {
@@ -61,23 +61,23 @@ export default function DashboardPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-5xl mx-auto py-8 px-6">
+      <div className="w-full py-0 px-5">
 
-        <div className="mb-6">
+        <div className="mb-2">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Prehľad portálu podpory</p>
         </div>
 
         {/* Stat cards — staff only */}
         {isStaff && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
             {stats.map(s => <StatCard key={s.label} {...s} />)}
           </div>
         )}
 
         {/* Charts + Recent — staff only */}
         {isStaff && (
-          <div className="grid grid-cols-2 gap-5 mb-5">
+          <div className="grid grid-cols-2 gap-3 mb-3">
 
             {/* Bar chart — tickets per day */}
             <div className="card">
@@ -86,7 +86,7 @@ export default function DashboardPage() {
                 <TrendingUp size={15} className="text-sycom-500" />
                 <span className="card-title">Tikety za posledných 7 dní</span>
               </div>
-              <div className="p-5">
+              <div className="p-3">
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={data?.ticketsPerDay ?? []} barSize={28}>
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7089a4' }} axisLine={false} tickLine={false} />
@@ -108,9 +108,10 @@ export default function DashboardPage() {
                 <Activity size={15} className="text-sycom-500" />
                 <span className="card-title">Tikety podľa priority</span>
               </div>
-              <div className="p-5 space-y-3">
+              <div className="p-3 space-y-3">
                 {(data?.byPriority ?? []).map((p: any) => {
-                  const pct = data?.totalOpen ? Math.round((p._count / data.totalOpen) * 100) : 0
+                  const total = (data?.byPriority ?? []).reduce((s: number, x: any) => s + x._count, 0)
+                  const pct = total ? Math.round((p._count / total) * 100) : 0
                   const color = PRIORITY_COLORS[p.priority] ?? '#94a3b8'
                   return (
                     <div key={p.priority}>
@@ -132,7 +133,7 @@ export default function DashboardPage() {
 
         {/* SLA + Recent Tickets — staff only */}
         {isStaff && (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-3">
 
             {/* SLA */}
             <div className="card">
@@ -141,11 +142,11 @@ export default function DashboardPage() {
                 <Clock size={15} className="text-sycom-500" />
                 <span className="card-title">Dodržiavanie SLA</span>
               </div>
-              <div className="p-5 space-y-3">
+              <div className="p-3 space-y-3">
                 {[
-                  { label: 'Dnes',        value: data?.slaToday,   total: data?.resolvedToday },
-                  { label: 'Tento týždeň', value: data?.slaWeek,    total: data?.resolvedWeek },
-                  { label: 'Tento mesiac', value: data?.slaMonth,   total: data?.resolvedMonth },
+                  { label: 'Dnes',        value: data?.summary?.slaToday,   total: data?.summary?.resolvedToday },
+                  { label: 'Tento týždeň', value: data?.summary?.slaWeek,    total: data?.summary?.resolvedWeek },
+                  { label: 'Tento mesiac', value: data?.summary?.slaMonth,   total: data?.summary?.resolvedMonth },
                 ].map(({ label, value, total }) => {
                   const pct = total ? Math.round(((value ?? 0) / total) * 100) : 0
                   const color = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444'

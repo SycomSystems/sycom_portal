@@ -391,7 +391,7 @@ export default function TicketDetailPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
                   <option value="">{ticket.assignee?.name ?? 'Nepriradeny'}</option>
                   {(agentList ?? []).map((a: any) => (
-                    <option key={a.id} value={a.id}>{a.name} ({a.role === 'ADMIN' ? 'Admin' : 'Agent'})</option>
+                    <option key={a.id} value={a.id}>{a.name} ({a.role === 'ADMIN' ? 'Admin' : 'Technik'})</option>
                   ))}
                 </select>
                 {assigneeId && (

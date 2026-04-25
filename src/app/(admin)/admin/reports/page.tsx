@@ -69,7 +69,7 @@ export default function ReportsPage() {
       ) : (
         <>
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Statistiky tiketov</h2>
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-3">
             {[
               { label: 'Otvorene tikety', value: s.totalOpen ?? 0, color: '#1a6fba' },
               { label: 'Tento mesiac', value: s.totalThisMonth ?? 0, color: '#7b3fbe' },
@@ -83,7 +83,7 @@ export default function ReportsPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-5 mb-5">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="card">
               <div className="card-stripe" />
               <div className="card-header"><span className="card-title">Tikety za poslednych 7 dni</span></div>
@@ -115,7 +115,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-3">
             <div className="card">
               <div className="card-stripe" />
               <div className="card-header"><span className="card-title">Tikety podla kategorie</span></div>

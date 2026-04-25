@@ -11,6 +11,8 @@ const createSchema = z.object({
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
   clientId:    z.string().optional(),
+  assigneeId:  z.string().optional(),
+  slaDeadline: z.string().optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -30,6 +32,9 @@ export async function GET(req: NextRequest) {
 
   if (role === 'CLIENT') {
     where.creatorId = userId
+  } else if (role === 'AGENT') {
+    const assigned = await prisma.clientTechnician.findMany({ where: { userId }, select: { clientId: true } })
+    where.clientId = { in: assigned.map(a => a.clientId) }
   } else if (role === 'CLIENT_MANAGER') {
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (me?.clientId) {
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest) {
   const userId  = (session.user as any).id
   const role    = (session.user as any).role
   const isStaff = role === 'ADMIN' || role === 'AGENT'
-  const { subject, description, priority, category, clientId } = parsed.data
+  const { subject, description, priority, category, clientId, assigneeId, slaDeadline } = parsed.data
 
   // For CLIENT/CLIENT_MANAGER — automatically set clientId from their own profile
   let resolvedClientId = clientId ?? null
@@ -86,6 +91,16 @@ export async function POST(req: NextRequest) {
     resolvedClientId = me?.clientId ?? null
   }
 
+  // Auto-assign technician from client if not provided
+  let resolvedAssigneeId = assigneeId ?? null
+  if (!resolvedAssigneeId && resolvedClientId) {
+    const tech = await prisma.clientTechnician.findFirst({
+      where: { clientId: resolvedClientId },
+      select: { userId: true },
+    })
+    resolvedAssigneeId = tech?.userId ?? null
+  }
+  const resolvedSla = slaDeadline ? new Date(slaDeadline) : getSlaDeadline(priority)
   const ticket = await prisma.ticket.create({
     data: {
       subject,
@@ -93,8 +108,9 @@ export async function POST(req: NextRequest) {
       priority,
       category,
       clientId:    resolvedClientId,
-      slaDeadline: getSlaDeadline(priority),
+      slaDeadline: resolvedSla,
       creatorId:   userId,
+      assigneeId:  resolvedAssigneeId,
     },
     include: {
       creator: { select: { id: true, name: true, email: true } },

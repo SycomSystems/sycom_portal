@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug } from 'lucide-react'
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
 
@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
+  { href: '/admin/debug', label: 'Debug', icon: <Bug size={16} />, roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {
@@ -44,10 +45,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-gray-100">
-      <div className="h-16 flex items-center px-5 border-b border-gray-100">
-        <span className="text-lg font-bold text-sycom-600">Sycom</span>
-        <span className="text-lg font-bold text-gray-400">Portal</span>
-      </div>
+      
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')

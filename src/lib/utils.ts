@@ -20,17 +20,24 @@ export function timeAgo(date: Date | string) {
   return formatDistanceToNow(new Date(date), { addSuffix: true, locale: sk })
 }
 
+// Add N working days (skip Sat/Sun)
+export function addWorkingDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  let added = 0
+  while (added < days) {
+    result.setDate(result.getDate() + 1)
+    const day = result.getDay()
+    if (day !== 0 && day !== 6) added++
+  }
+  return result
+}
 // SLA deadline based on priority
 export function getSlaDeadline(priority: string): Date {
   const now = new Date()
-  const hours: Record<string, number> = {
-    CRITICAL: 1,
-    HIGH:     4,
-    MEDIUM:   24,
-    LOW:      72,
-  }
-  now.setHours(now.getHours() + (hours[priority] ?? 24))
-  return now
+  if (priority === 'CRITICAL') { const d = new Date(now); d.setHours(d.getHours() + 1); return d }
+  if (priority === 'HIGH')     { const d = new Date(now); d.setHours(d.getHours() + 4); return d }
+  if (priority === 'LOW')      return addWorkingDays(now, 5)
+  return addWorkingDays(now, 2) // MEDIUM default
 }
 
 export function isSlaBreached(deadline: Date | null): boolean {

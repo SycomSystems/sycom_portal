@@ -16,6 +16,7 @@ const schema = z.object({
   priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
   clientId:    z.string().optional(),
+  assigneeId:  z.string().optional(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -46,6 +47,8 @@ export default function NewTicketPage() {
   const isStaff             = role === 'ADMIN' || role === 'AGENT'
 
   const [loading,  setLoading]  = useState(false)
+  const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
+  const [slaDate, setSlaDate] = useState<string>('')
   const [clients,  setClients]  = useState<{ id: string; name: string }[]>([])
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<FormData>({
@@ -68,6 +71,43 @@ export default function NewTicketPage() {
   }, [isStaff, userClientId, setValue])
 
   const selectedPriority = watch('priority')
+  const selectedClientId = watch('clientId')
+
+  // Set initial SLA date on client side (avoids SSR/client mismatch)
+  useEffect(() => {
+    const d = new Date()
+    let added = 0
+    while (added < 2) {
+      d.setDate(d.getDate() + 1)
+      const day = d.getDay()
+      if (day !== 0 && day !== 6) added++
+    }
+    setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
+  }, [])
+
+  // Auto-populate technicians when client changes
+  useEffect(() => {
+    if (!isStaff || !selectedClientId) { setTechnicians([]); setValue('assigneeId', ''); return }
+    const client = (clients as any[]).find(c => c.id === selectedClientId)
+    const techs = (client?.technicians ?? []).map((t: any) => ({ id: t.userId, name: t.user?.name ?? t.userId }))
+    setTechnicians(techs)
+    setValue('assigneeId', techs.length > 0 ? techs[0].id : '')
+  }, [selectedClientId, clients, isStaff, setValue])
+
+  // Update SLA date when priority changes
+  useEffect(() => {
+    const d = new Date()
+    if (selectedPriority === 'CRITICAL') { setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); return }
+    if (selectedPriority === 'HIGH') { d.setDate(d.getDate() + 1); setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); return }
+    const days = selectedPriority === 'LOW' ? 5 : 2
+    let added = 0
+    while (added < days) {
+      d.setDate(d.getDate() + 1)
+      const wd = d.getDay()
+      if (wd !== 0 && wd !== 6) added++
+    }
+    setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
+  }, [selectedPriority])
 
   async function onSubmit(data: FormData) {
     setLoading(true)
@@ -80,6 +120,8 @@ export default function NewTicketPage() {
       }
       // Pass clientId as department field (mapped in API) or directly
       if (data.clientId) body.clientId = data.clientId
+      if (data.assigneeId) body.assigneeId = data.assigneeId
+      body.slaDeadline = slaDate
 
       const res = await fetch('/api/tickets', {
         method:  'POST',
@@ -179,6 +221,24 @@ export default function NewTicketPage() {
                   <p className="text-sm text-gray-400">Žiadny klient priradený</p>
                 )}
               </div>
+              {/* Assignee technician — staff only */}
+              {isStaff && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pridelený technik</label>
+                  <select {...register('assigneeId')} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">
+                    <option value="">— Automaticky —</option>
+                    {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {/* SLA deadline — staff only */}
+              {isStaff && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">SLA termín</label>
+                  <input type="date" value={slaDate} onChange={e => setSlaDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white" />
+                </div>
+              )}
             </div>
           </div>
 

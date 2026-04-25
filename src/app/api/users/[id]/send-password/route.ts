@@ -17,7 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await prisma.user.findUnique({ where: { id: params.id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const newPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12)
+  const body = await req.json().catch(() => ({}))
+  const newPassword = (body.password && body.password.length >= 6) ? body.password : crypto.randomBytes(8).toString('base64url').slice(0, 12)
   const hashed = await bcrypt.hash(newPassword, 12)
 
   await prisma.user.update({

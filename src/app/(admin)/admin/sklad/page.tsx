@@ -363,7 +363,7 @@ export default function SkladPage() {
         )}
 
         {/* Summary stats */}
-        <div className="grid grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-4 gap-3 mb-3">
           {[
             { label: 'Položiek na sklade', value: items.length, icon: <Package size={18}/>, color: 'text-sycom-500', bg: 'bg-sycom-50' },
             { label: 'Hodnota skladu', value: fmt(totalValue) + ' €', icon: <BarChart2 size={18}/>, color: 'text-green-600', bg: 'bg-green-50' },
@@ -468,8 +468,8 @@ export default function SkladPage() {
         {view === 'movements' && (
           <>
             {/* Filters */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="relative sm:col-span-2">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="relative sm:col-span-2 lg:col-span-2">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Hľadať..."
                   className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/>
@@ -486,7 +486,7 @@ export default function SkladPage() {
                 <option value="">Všetci zákazníci</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 sm:col-span-2 lg:col-span-2">
                 <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="flex-1 px-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none"/>
                 <span className="text-gray-400 text-xs">—</span>
                 <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="flex-1 px-2 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none"/>
@@ -502,7 +502,7 @@ export default function SkladPage() {
                       {[['type','Typ'],['name','Názov'],['qty','Množstvo'],['price','Cena/ks'],['total','Spolu'],['date','Dátum'],['supplier','Dodávateľ'],['client','Zákazník'],['note','Faktúra/Pozn.'],['addedBy','Zapísal']].map(([col, label]) => (
                         <th key={col} onClick={() => toggleSort(col)}
                           className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 select-none whitespace-nowrap">
-                          <span className="flex items-center gap-1">{label} <SortIcon col={col}/></span>
+                          <span className="flex items-center gap-1 sm:col-span-2 lg:col-span-2">{label} <SortIcon col={col}/></span>
                         </th>
                       ))}
                       {role === 'ADMIN' && <th className="px-3 py-3 text-[10px] font-bold text-gray-400 uppercase"></th>}
@@ -510,7 +510,7 @@ export default function SkladPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {loading ? (
-                      <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-gray-400">Načítavam...</td></tr>
+                      <tr><td colSpan={11} className="px-4 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
                     ) : filtered.length === 0 ? (
                       <tr><td colSpan={11} className="px-4 py-12 text-center">
                         <Package size={32} className="mx-auto mb-2 text-gray-200"/>
@@ -538,7 +538,7 @@ export default function SkladPage() {
                         <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">{m.addedBy.name}</td>
                         {role === 'ADMIN' && (
                           <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 sm:col-span-2 lg:col-span-2">
                               <button onClick={() => openEdit(m)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={12}/></button>
                               <button onClick={() => handleDelete(m.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={12}/></button>
                             </div>
@@ -572,7 +572,7 @@ export default function SkladPage() {
               <div className="flex items-center gap-2"><ArrowDownLeft size={16} className="text-green-600"/><h2 className="text-base font-semibold text-gray-900">Príjem tovaru</h2></div>
               <button onClick={() => setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4">
               <Autocomplete label="Názov tovaru" value={buyItemName}
                 onChange={v => { setBuyItemName(v); setBuyItemId(''); setBuyIsNew(false); setBuySelectedItem(null) }}
                 onSelect={(id, name, extra) => { setBuyItemId(id); setBuyItemName(name); setBuyIsNew(false); setBuySelectedItem(extra as StockItem); setBuyVat(String((extra as StockItem).vatRate)) }}
@@ -645,7 +645,7 @@ export default function SkladPage() {
               <div className="flex items-center gap-2"><ArrowUpRight size={16} className="text-sycom-500"/><h2 className="text-base font-semibold text-gray-900">Predaj tovaru</h2></div>
               <button onClick={() => setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4">
               <Autocomplete label="Tovar" value={sellItemName}
                 onChange={v => { setSellItemName(v); setSellItemId(''); setSellSelectedItem(null); setSellPrice('') }}
                 onSelect={(id, name, extra) => { setSellItemId(id); setSellItemName(name); setSellSelectedItem(extra as StockItem) }}
@@ -714,7 +714,7 @@ export default function SkladPage() {
               </div>
               <button onClick={() => setEditMovement(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4">
               {eStatus && (
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm ${eStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
                   {eStatus.type === 'success' ? <Check size={13}/> : <X size={13}/>} {eStatus.msg}

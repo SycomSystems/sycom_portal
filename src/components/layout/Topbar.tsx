@@ -50,10 +50,7 @@ export function Topbar() {
               <div className="text-[9px] font-bold tracking-widest uppercase text-gray-400 leading-none mt-0.5">IT Podpora</div>
             </div>
           </>
-        )}
-        <div className="w-px h-7 bg-gray-200 mx-1" />
-        <span className="text-xs font-semibold text-gray-400">Support Portal</span>
-      </div>
+        )}</div>
 
       <div className="ml-auto flex items-center gap-3">
         {/* System status */}

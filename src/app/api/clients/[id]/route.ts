@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, pricing } = await req.json()
+  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, emailAlias, pricing, technicianIds } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
   try {
@@ -27,6 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         address: address?.trim() || null,
         www: www?.trim() || null,
         notes: notes?.trim() || null,
+          emailAlias: emailAlias?.trim() || null,
       },
     })
 
@@ -46,6 +47,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { id: params.id },
       include: { pricing: true, _count: { select: { users: true } } },
     })
+    if (Array.isArray(technicianIds)) {
+      await prisma.clientTechnician.deleteMany({ where: { clientId: params.id } })
+      if (technicianIds.length > 0)
+        await prisma.clientTechnician.createMany({ data: technicianIds.map((uid: string) => ({ clientId: params.id, userId: uid })) })
+    }
     return NextResponse.json(updated)
   } catch {
     return NextResponse.json({ error: 'Client not found or name already exists' }, { status: 409 })

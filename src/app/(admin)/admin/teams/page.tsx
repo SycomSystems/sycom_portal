@@ -91,7 +91,7 @@ export default function TeamsPage() {
 
   return (
     <PortalLayout>
-      <div className="flex items-end justify-between mb-6">
+      <div className="flex items-end justify-between mb-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Tímy</h1>
           <p className="text-sm text-gray-400 mt-0.5">{teams.length} tímov · Správa a členovia</p>
@@ -106,7 +106,7 @@ export default function TeamsPage() {
           <div className="w-8 h-8 border-2 border-sycom-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-2 gap-3">
           {teams.map((team: any) => {
             const members = team.members ?? []
             const lead    = members.find((m: any) => m.isLead)
@@ -252,7 +252,7 @@ export default function TeamsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit(d => createMutation.mutate(d))} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit(d => createMutation.mutate(d))} className="p-4 space-y-4">
               <div>
                 <label className="label">Názov tímu *</label>
                 <input {...register('name')} className="input" placeholder="IT Support, Sieť, Bezpečnosť…" />
