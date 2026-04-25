@@ -231,137 +231,7 @@ export default function TicketDetailPage() {
       <div className="max-w-3xl mx-auto py-8 px-6 text-center">
         <p className="text-gray-500">Tiket sa nenasel.</p>
         <button onClick={() => router.back()} className="mt-4 text-sm text-sycom-500 hover:underline">← Spat</button>
-          {/* ── Spotrebovaný materiál ─────────────────────────────────── */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                Spotrebovaný materiál
-              </p>
-              {(session?.user?.role === 'AGENT' || session?.user?.role === 'ADMIN') && !showAddUsage && (
-                <button
-                  onClick={() => setShowAddUsage(true)}
-                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-sycom-500 text-white rounded-xl hover:bg-sycom-600 transition-colors"
-                >
-                  + Pridať položku
-                </button>
-              )}
-            </div>
-
-            {showAddUsage && (
-              <div className="bg-sycom-50 border border-sycom-200 rounded-2xl p-4 mb-4">
-                <p className="text-xs font-bold text-sycom-700 uppercase tracking-wider mb-3">Nová položka zo skladu</p>
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    placeholder="Hľadať položku..."
-                    value={usageItemSearch}
-                    onChange={e => searchStockItems(e.target.value)}
-                    className="w-full border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100 bg-white"
-                  />
-                  {usageItemResults.length > 0 && (
-                    <ul className="absolute z-10 bg-white border border-gray-200 rounded-xl shadow-md w-full mt-1 max-h-48 overflow-y-auto text-sm">
-                      {usageItemResults.map((item: any) => (
-                        <li
-                          key={item.id}
-                          onClick={() => { setUsageItemSelected(item); setUsageItemSearch(item.name); setUsageItemResults([]) }}
-                          className="px-3 py-2 hover:bg-sycom-50 cursor-pointer flex justify-between items-center"
-                        >
-                          <span>
-                            <span className="font-medium">{item.name}</span>
-                            {item.sku && <span className="text-gray-400 text-xs ml-2">({item.sku})</span>}
-                          </span>
-                          <span className="text-gray-400 text-xs">{item.currentStock} {item.unit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
-                <div className="flex gap-2 mb-3">
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      placeholder="Množstvo"
-                      value={usageQty}
-                      onChange={e => setUsageQty(e.target.value)}
-                      className="w-28 border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 bg-white"
-                    />
-                    {usageItemSelected && (
-                      <span className="text-xs font-semibold text-sycom-600">{usageItemSelected.unit}</span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Poznámka (voliteľné)"
-                    value={usageNote}
-                    onChange={e => setUsageNote(e.target.value)}
-                    className="flex-1 border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 bg-white"
-                  />
-                </div>
-                {usageError && <p className="text-red-500 text-xs mb-2">{usageError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddUsage}
-                    disabled={usageSubmitting}
-                    className="px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
-                  >
-                    {usageSubmitting ? 'Ukladám...' : 'Pridať'}
-                  </button>
-                  <button
-                    onClick={() => { setShowAddUsage(false); setUsageError(''); setUsageItemSearch(''); setUsageItemResults([]); setUsageItemSelected(null); setUsageQty(''); setUsageNote('') }}
-                    className="px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
-                  >
-                    Zrušiť
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {stockUsageLoading ? (
-              <p className="text-xs text-gray-400">Načítavam...</p>
-            ) : stockUsages.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">Žiadny materiál nebol spotrebovaný</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                    <th className="text-left pb-2">Položka</th>
-                    <th className="text-left pb-2">SKU</th>
-                    <th className="text-right pb-2">Množstvo</th>
-                    <th className="text-left pb-2 pl-4">Poznámka</th>
-                    <th className="text-left pb-2 pl-4">Pridal</th>
-                    {session?.user?.role === 'ADMIN' && <th className="w-8"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {stockUsages.map((u: any) => (
-                    <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                      <td className="py-2 font-medium text-gray-800">{u.stockItem?.name ?? '—'}</td>
-                      <td className="py-2 text-gray-400 text-xs">{u.stockItem?.sku ?? '—'}</td>
-                      <td className="py-2 text-right font-mono text-gray-700">{u.qty} {u.stockItem?.unit ?? ''}</td>
-                      <td className="py-2 pl-4 text-gray-500">{u.note ?? ''}</td>
-                      <td className="py-2 pl-4 text-gray-400 text-xs">{u.createdBy?.name ?? u.createdBy?.email ?? '—'}</td>
-                      {session?.user?.role === 'ADMIN' && (
-                        <td className="py-2 text-right">
-                          <button
-                            onClick={() => handleDeleteUsage(u.id)}
-                            className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Odstrániť a vrátiť na sklad"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          {/* ── END Spotrebovaný materiál ──────────────────────────────── */}
-
-      </div>
     </PortalLayout>
   )
 
@@ -616,6 +486,136 @@ export default function TicketDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── Spotrebovaný materiál ─────────────────────────────────── */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        Spotrebovaný materiál
+                      </p>
+                      {(session?.user?.role === 'AGENT' || session?.user?.role === 'ADMIN') && !showAddUsage && (
+                        <button
+                          onClick={() => setShowAddUsage(true)}
+                          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-sycom-500 text-white rounded-xl hover:bg-sycom-600 transition-colors"
+                        >
+                          + Pridať položku
+                        </button>
+                      )}
+                    </div>
+        
+                    {showAddUsage && (
+                      <div className="bg-sycom-50 border border-sycom-200 rounded-2xl p-4 mb-4">
+                        <p className="text-xs font-bold text-sycom-700 uppercase tracking-wider mb-3">Nová položka zo skladu</p>
+                        <div className="relative mb-3">
+                          <input
+                            type="text"
+                            placeholder="Hľadať položku..."
+                            value={usageItemSearch}
+                            onChange={e => searchStockItems(e.target.value)}
+                            className="w-full border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100 bg-white"
+                          />
+                          {usageItemResults.length > 0 && (
+                            <ul className="absolute z-10 bg-white border border-gray-200 rounded-xl shadow-md w-full mt-1 max-h-48 overflow-y-auto text-sm">
+                              {usageItemResults.map((item: any) => (
+                                <li
+                                  key={item.id}
+                                  onClick={() => { setUsageItemSelected(item); setUsageItemSearch(item.name); setUsageItemResults([]) }}
+                                  className="px-3 py-2 hover:bg-sycom-50 cursor-pointer flex justify-between items-center"
+                                >
+                                  <span>
+                                    <span className="font-medium">{item.name}</span>
+                                    {item.sku && <span className="text-gray-400 text-xs ml-2">({item.sku})</span>}
+                                  </span>
+                                  <span className="text-gray-400 text-xs">{item.currentStock} {item.unit}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mb-3">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="Množstvo"
+                              value={usageQty}
+                              onChange={e => setUsageQty(e.target.value)}
+                              className="w-28 border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 bg-white"
+                            />
+                            {usageItemSelected && (
+                              <span className="text-xs font-semibold text-sycom-600">{usageItemSelected.unit}</span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Poznámka (voliteľné)"
+                            value={usageNote}
+                            onChange={e => setUsageNote(e.target.value)}
+                            className="flex-1 border border-sycom-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sycom-400 bg-white"
+                          />
+                        </div>
+                        {usageError && <p className="text-red-500 text-xs mb-2">{usageError}</p>}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleAddUsage}
+                            disabled={usageSubmitting}
+                            className="px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"
+                          >
+                            {usageSubmitting ? 'Ukladám...' : 'Pridať'}
+                          </button>
+                          <button
+                            onClick={() => { setShowAddUsage(false); setUsageError(''); setUsageItemSearch(''); setUsageItemResults([]); setUsageItemSelected(null); setUsageQty(''); setUsageNote('') }}
+                            className="px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            Zrušiť
+                          </button>
+                        </div>
+                      </div>
+                    )}
+        
+                    {stockUsageLoading ? (
+                      <p className="text-xs text-gray-400">Načítavam...</p>
+                    ) : stockUsages.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Žiadny materiál nebol spotrebovaný</p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                            <th className="text-left pb-2">Položka</th>
+                            <th className="text-left pb-2">SKU</th>
+                            <th className="text-right pb-2">Množstvo</th>
+                            <th className="text-left pb-2 pl-4">Poznámka</th>
+                            <th className="text-left pb-2 pl-4">Pridal</th>
+                            {session?.user?.role === 'ADMIN' && <th className="w-8"></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stockUsages.map((u: any) => (
+                            <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                              <td className="py-2 font-medium text-gray-800">{u.stockItem?.name ?? '—'}</td>
+                              <td className="py-2 text-gray-400 text-xs">{u.stockItem?.sku ?? '—'}</td>
+                              <td className="py-2 text-right font-mono text-gray-700">{u.qty} {u.stockItem?.unit ?? ''}</td>
+                              <td className="py-2 pl-4 text-gray-500">{u.note ?? ''}</td>
+                              <td className="py-2 pl-4 text-gray-400 text-xs">{u.createdBy?.name ?? u.createdBy?.email ?? '—'}</td>
+                              {session?.user?.role === 'ADMIN' && (
+                                <td className="py-2 text-right">
+                                  <button
+                                    onClick={() => handleDeleteUsage(u.id)}
+                                    className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Odstrániť a vrátiť na sklad"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  {/* ── END Spotrebovaný materiál ──────────────────────────────── */}
       </div>
     
           
