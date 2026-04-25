@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/notifications'
 import { z } from 'zod'
 import { getSlaDeadline } from '@/lib/utils'
 
@@ -141,6 +142,16 @@ export async function POST(req: NextRequest) {
       }
     }
   }).catch(() => {})
+
+  // In-app notifikacia pre technika
+  if (resolvedAssigneeId) {
+    createNotification(
+      resolvedAssigneeId,
+      'NEW_TICKET',
+      `Novy tiket #${ticket.ticketNumber}: ${ticket.subject}`,
+      ticket.id
+    ).catch(() => {})
+  }
 
   return NextResponse.json(ticket, { status: 201 })
 }
