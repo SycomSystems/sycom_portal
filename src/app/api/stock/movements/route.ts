@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     // New stock item fields (if creating new)
     newItemSku, newItemCategory, newItemUnit, newItemDescription,
     newItemMinStock, newItemLocation,
+      newItemSellingPrice,
   } = body
 
   if (!type || !stockItemId || !quantity)

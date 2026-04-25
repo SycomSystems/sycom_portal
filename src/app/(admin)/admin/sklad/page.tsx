@@ -30,7 +30,7 @@ function fmtDate(d: string) { return new Date(d).toLocaleDateString('sk-SK') }
 function toInputDate(d: string) { return new Date(d).toISOString().slice(0, 10) }
 
 interface SupplierPrice { id:string; price:number; currency:string; isPreferred:boolean; minOrderQty:number|null; leadTimeDays:number|null; supplierSku:string|null; note:string|null; lastUpdated:string; supplier:{id:string;name:string;email?:string;phone?:string} }
-interface StockItem { id:string; name:string; sku:string|null; category:string|null; description:string|null; unit:string; vatRate:number; minStock:number; maxStock:number; currentStock:number; avgPurchasePrice:number; lastPurchasePrice:number; lastSalePrice:number; location:string|null; serialTracking:boolean; supplierPrices?:SupplierPrice[] }
+interface StockItem { id:string; name:string; sku:string|null; category:string|null; description:string|null; unit:string; vatRate:number; minStock:number; maxStock:number; currentStock:number; avgPurchasePrice:number; lastPurchasePrice:number; lastSalePrice:number; sellingPrice:number; location:string|null; serialTracking:boolean; supplierPrices?:SupplierPrice[] }
 interface Supplier { id:string; name:string }
 interface Client { id:string; name:string }
 interface Movement { id:string; type:MovementType; quantity:number; pricePerUnit:number; totalPrice:number; vatRate:number; note:string|null; invoiceNumber:string|null; date:string; stockItem:StockItem; supplier:Supplier|null; client:{id:string;name:string}|null; addedBy:{id:string;name:string} }
@@ -86,7 +86,7 @@ export default function SkladPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'movements'|'items'>('movements')
+  const [view, setView] = useState<'movements'|'items'>('items')
   const [modal, setModal] = useState<'buy'|'sell'|'newItem'|null>(null)
   const [status, setStatus] = useState<{type:'success'|'error'; msg:string}|null>(null)
 
@@ -114,6 +114,7 @@ export default function SkladPage() {
   const [buyInvoice, setBuyInvoice] = useState('')
   const [buySubmitting, setBuySubmitting] = useState(false)
   const [buySelectedItem, setBuySelectedItem] = useState<StockItem|null>(null)
+  const [buySellingPrice, setBuySellingPrice] = useState('')
 
   // Sell form
   const [sellItemId, setSellItemId] = useState('')
@@ -138,6 +139,16 @@ export default function SkladPage() {
   const [eDate, setEDate] = useState('')
   const [eInvoice, setEInvoice] = useState('')
   const [eSubmitting, setESubmitting] = useState(false)
+  // New item card form
+  const [niName, setNiName] = useState('')
+  const [niSku, setNiSku] = useState('')
+  const [niCategory, setNiCategory] = useState('')
+  const [niUnit, setNiUnit] = useState('ks')
+  const [niVat, setNiVat] = useState('20')
+  const [niSellingPrice, setNiSellingPrice] = useState('')
+  const [niMinStock, setNiMinStock] = useState('0')
+  const [niSubmitting, setNiSubmitting] = useState(false)
+  const [niError, setNiError] = useState('')
   const [eStatus, setEStatus] = useState<{type:'success'|'error'; msg:string}|null>(null)
 
   const load = useCallback(async () => {
@@ -233,6 +244,31 @@ export default function SkladPage() {
   const supplierSuggestions = suppliers.map(s => ({ id: s.id, name: s.name }))
   const clientSuggestions   = clients.map(c => ({ id: c.id, name: c.name }))
 
+  async function handleNewItem() {
+    if (!niName.trim()) return
+    setNiSubmitting(true)
+    try {
+      const res = await fetch('/api/stock/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: niName.trim(), sku: niSku.trim() || undefined,
+          category: niCategory.trim() || undefined, unit: niUnit,
+          vatRate: parseFloat(niVat) || 20,
+          sellingPrice: parseFloat(niSellingPrice) || 0,
+          minStock: parseInt(niMinStock) || 0,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Chyba')
+      setModal(null)
+      setNiName(''); setNiSku(''); setNiCategory(''); setNiUnit('ks')
+      setNiVat('20'); setNiSellingPrice(''); setNiMinStock('0')
+      load()
+      showStatus('success', 'Karta tovaru bola vytvorená.')
+    } catch (e: any) { showStatus('error', e.message) }
+    finally { setNiSubmitting(false) }
+  }
   async function handleBuy() {
     if (!buyItemName.trim() || !buyQty || !buyPrice) return
     setBuySubmitting(true)
@@ -247,6 +283,7 @@ export default function SkladPage() {
           supplierId: buySupplierId || null,
           newSupplierName: !buySupplierId && buySupplierName.trim() ? buySupplierName.trim() : null,
           note: buyNote || null, date: buyDate, invoiceNumber: buyInvoice || null,
+          newItemSellingPrice: parseFloat(buySellingPrice) || undefined,
         }),
       })
       const data = await res.json()
@@ -263,6 +300,7 @@ export default function SkladPage() {
     setBuyItemId(''); setBuyItemName(''); setBuyIsNew(false); setBuyQty(''); setBuyPrice('')
     setBuyVat('20'); setBuySupplierId(''); setBuySupplierName(''); setBuyNote(''); setBuyInvoice('')
     setBuyDate(new Date().toISOString().slice(0, 10)); setBuySelectedItem(null)
+    setBuySellingPrice('')
   }
 
   async function handleSell() {
@@ -340,7 +378,7 @@ export default function SkladPage() {
               className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
               {view === 'movements' ? <><Grid3x3 size={14}/> Karty tovaru</> : <><List size={14}/> Pohyby</>}
             </button>
-            <button onClick={() => router.push('/admin/sklad/items/new')}
+            <button onClick={() => setModal('newItem')}
               className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
               <Tag size={14}/> Nová karta tovaru
             </button>
@@ -405,7 +443,7 @@ export default function SkladPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    {['Názov', 'SKU', 'Kategória', 'Jedn.', 'DPH', 'Min', 'Stav', 'Avg. nákup. cena', 'Posl. predaj', 'Dodávatelia', ''].map(h => (
+                    {['Názov', 'SKU', 'Kategória', 'Jedn.', 'DPH', 'Min', 'Stav', 'Avg. nákup. cena', 'Predajná cena', 'Dodávatelia', ''].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -429,7 +467,7 @@ export default function SkladPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-700 font-medium">{fmt(item.avgPurchasePrice)} €</td>
-                      <td className="px-4 py-3 text-gray-700">{item.lastSalePrice > 0 ? fmt(item.lastSalePrice) + ' €' : '—'}</td>
+                      <td className="px-4 py-3 text-gray-700">{item.sellingPrice > 0 ? fmt(item.sellingPrice) + ' €' : '—'}</td>
                       <td className="px-4 py-3">
                         {/* Supplier price list */}
                         {(item.supplierPrices ?? []).length > 0 ? (
@@ -617,6 +655,9 @@ export default function SkladPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">DPH (%)</label><input type="number" min="0" max="100" value={buyVat} onChange={e => setBuyVat(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
+              </div>
+              <div><label className="block text-xs font-semibold text-gray-500 mb-1">Predajná cena/ks bez DPH (€)</label><input type="number" min="0" step="0.01" value={buySellingPrice} onChange={e => setBuySellingPrice(e.target.value)} placeholder="Nastaví predajnú cenu na karte tovaru" className="w-full px-3 py-2 border border-sycom-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-sycom-50"/></div>
+              <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">Č. faktúry / dokladu</label><input type="text" value={buyInvoice} onChange={e => setBuyInvoice(e.target.value)} placeholder="F2024/001" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">Dátum nákupu</label><input type="date" value={buyDate} onChange={e => setBuyDate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
               </div>
@@ -648,7 +689,7 @@ export default function SkladPage() {
             <div className="p-4 space-y-4">
               <Autocomplete label="Tovar" value={sellItemName}
                 onChange={v => { setSellItemName(v); setSellItemId(''); setSellSelectedItem(null); setSellPrice('') }}
-                onSelect={(id, name, extra) => { setSellItemId(id); setSellItemName(name); setSellSelectedItem(extra as StockItem) }}
+                onSelect={(id, name, extra) => { setSellItemId(id); setSellItemName(name); setSellSelectedItem(extra as StockItem); const sp = (extra as StockItem)?.sellingPrice; if (sp && sp > 0) setSellPrice(String(sp)) }}
                 suggestions={itemSuggestions.filter(i => { const item = items.find(x => x.id === i.id); return (item?.currentStock ?? 0) > 0 })}
                 placeholder="Hľadať tovar na sklade..." required
               />
@@ -656,7 +697,7 @@ export default function SkladPage() {
                 <div className="bg-gray-50 rounded-xl px-3 py-2.5 grid grid-cols-3 gap-3 text-xs">
                   <div><p className="text-gray-400 font-semibold">Skladom</p><p className="font-bold text-gray-800">{sellSelectedItem.currentStock} {sellSelectedItem.unit}</p></div>
                   <div><p className="text-gray-400 font-semibold">Avg. nák. cena</p><p className="font-bold text-gray-800">{fmt(sellSelectedItem.avgPurchasePrice)} €</p></div>
-                  <div><p className="text-gray-400 font-semibold">Posl. predaj</p><p className="font-bold text-gray-800">{sellSelectedItem.lastSalePrice > 0 ? fmt(sellSelectedItem.lastSalePrice) + ' €' : '—'}</p></div>
+                  <div><p className="text-gray-400 font-semibold">Predajná cena</p><p className="font-bold text-sycom-600">{sellSelectedItem.sellingPrice > 0 ? fmt(sellSelectedItem.sellingPrice) + ' €' : '—'}</p></div>
                 </div>
               )}
 
@@ -742,6 +783,114 @@ export default function SkladPage() {
           </div>
         </div>
       )}
+    
+      {/* ── Nová karta tovaru modal ───────────────────────────────────── */}
+      {modal === 'newItem' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 className="text-base font-semibold text-gray-800 mb-4">Nová karta tovaru</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Názov *</label>
+                <input
+                  type="text"
+                  value={niName}
+                  onChange={e => setNiName(e.target.value)}
+                  placeholder="Názov položky"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">SKU / Kód</label>
+                  <input
+                    type="text"
+                    value={niSku}
+                    onChange={e => setNiSku(e.target.value)}
+                    placeholder="napr. KABEL-CAT6"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Kategória</label>
+                  <input
+                    type="text"
+                    value={niCategory}
+                    onChange={e => setNiCategory(e.target.value)}
+                    placeholder="napr. Káble"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Jednotka *</label>
+                  <input
+                    type="text"
+                    value={niUnit}
+                    onChange={e => setNiUnit(e.target.value)}
+                    placeholder="ks / m / kg"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Predajná cena (€)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={niSellingPrice}
+                    onChange={e => setNiSellingPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">DPH (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={niVat}
+                    onChange={e => setNiVat(e.target.value)}
+                    placeholder="20"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Min. zásoba</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={niMinStock}
+                  onChange={e => setNiMinStock(e.target.value)}
+                  placeholder="0"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
+                />
+              </div>
+            </div>
+            {niError && <p className="text-red-600 text-xs mt-3">{niError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={handleNewItem}
+                disabled={niSubmitting}
+                className="flex-1 bg-sycom-primary text-white text-sm py-2 rounded-lg hover:bg-sycom-primary/90 disabled:opacity-50"
+              >
+                {niSubmitting ? 'Ukladám...' : 'Vytvoriť kartu'}
+              </button>
+              <button
+                onClick={() => { setModal(null); setNiName(''); setNiSku(''); setNiCategory(''); setNiUnit('ks'); setNiVat('20'); setNiSellingPrice(''); setNiMinStock(''); setNiError('') }}
+                className="px-4 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Zrušiť
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </PortalLayout>
   )
 }
