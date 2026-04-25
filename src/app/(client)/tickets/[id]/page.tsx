@@ -180,7 +180,7 @@ export default function TicketDetailPage() {
   const fetchStockUsages = async () => {
     setStockUsageLoading(true)
     try {
-      const res = await fetch(`/api/tickets/${params.id}/stock-usage`)
+      const res = await fetch(`/api/tickets/${id}/stock-usage`)
       if (res.ok) {
         const data = await res.json()
         setStockUsages(data.usages ?? [])
@@ -191,9 +191,9 @@ export default function TicketDetailPage() {
   }
 
   useEffect(() => {
-    if (params.id) fetchStockUsages()
+    if (id) fetchStockUsages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id])
+  }, [id])
 
   const searchStockItems = async (q: string) => {
     setUsageItemSearch(q)
@@ -213,7 +213,7 @@ export default function TicketDetailPage() {
     setUsageError('')
     setUsageSubmitting(true)
     try {
-      const res = await fetch(`/api/tickets/${params.id}/stock-usage`, {
+      const res = await fetch(`/api/tickets/${id}/stock-usage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stockItemId: usageItemSelected.id, qty, note: usageNote }),
@@ -237,7 +237,7 @@ export default function TicketDetailPage() {
 
   const handleDeleteUsage = async (usageId: string) => {
     if (!confirm('Odstrániť túto položku a vrátiť ju na sklad?')) return
-    const res = await fetch(`/api/tickets/${params.id}/stock-usage/${usageId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/tickets/${id}/stock-usage/${usageId}`, { method: 'DELETE' })
     if (res.ok) fetchStockUsages()
     else alert('Chyba pri odstraňovaní')
   }
