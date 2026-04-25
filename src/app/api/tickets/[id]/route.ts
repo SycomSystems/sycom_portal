@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { logAudit } from '@/lib/audit'
 import { createNotification } from '@/lib/notifications'
 import { z } from 'zod'
 
@@ -134,6 +135,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
   }).catch(() => {})
+
+  // Audit log
+  const auditUserId = userId
+  if (status && status !== ticket.status) {
+    logAudit(auditUserId, 'ticket', params.id, 'status_changed', ticket.status, status).catch(() => {})
+  }
+  if (priority && priority !== ticket.priority) {
+    logAudit(auditUserId, 'ticket', params.id, 'priority_changed', ticket.priority, priority).catch(() => {})
+  }
+  if (assigneeId !== undefined && assigneeId !== ticket.assigneeId) {
+    logAudit(auditUserId, 'ticket', params.id, 'assignee_changed', ticket.assigneeId ?? null, assigneeId ?? null).catch(() => {})
+  }
+  if (isAdmin && clientId !== undefined && clientId !== ticket.clientId) {
+    logAudit(auditUserId, 'ticket', params.id, 'client_changed', ticket.clientId ?? null, clientId ?? null).catch(() => {})
+  }
+  if (commentBody) {
+    logAudit(auditUserId, 'ticket', params.id, isInternal ? 'internal_comment_added' : 'comment_added', null, commentBody.substring(0, 200)).catch(() => {})
+  }
 
   // In-app notifikacie
   if (commentBody && !isInternal) {
