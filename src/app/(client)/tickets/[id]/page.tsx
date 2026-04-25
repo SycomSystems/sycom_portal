@@ -251,7 +251,7 @@ export default function TicketDetailPage() {
         <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-sycom-500 mb-5 transition-colors">
           <ArrowLeft size={15} /> Spat na tikety
         </button>
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mt-5 mb-5">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
