@@ -41,8 +41,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (!me?.clientId || me.clientId !== ticket.clientId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const totalWorkedHours = Math.round(ticket.comments.reduce((sum, c) => sum + (c.workedHours ?? 0), 0) * 100) / 100
-  return NextResponse.json({ ...ticket, totalWorkedHours })
+  const isClientRole = role === 'CLIENT' || role === 'CLIENT_MANAGER'
+  const visibleComments = isClientRole
+    ? ticket.comments.filter(c => !c.isInternal)
+    : ticket.comments
+  const totalWorkedHours = Math.round(visibleComments.reduce((sum, c) => sum + (c.workedHours ?? 0), 0) * 100) / 100
+  return NextResponse.json({ ...ticket, comments: visibleComments, totalWorkedHours })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
