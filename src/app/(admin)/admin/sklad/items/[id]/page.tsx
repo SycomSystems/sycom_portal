@@ -38,6 +38,7 @@ export default function StockItemDetailPage() {
   const [eMinStock,        setEMinStock]        = useState('0')
   const [eMaxStock,        setEMaxStock]        = useState('0')
   const [eLocation,        setELocation]        = useState('')
+  const [eSellingPrice,    setESellingPrice]    = useState('0')
 
   // New supplier price form
   const [showPriceForm, setShowPriceForm] = useState(false)
@@ -70,6 +71,7 @@ export default function StockItemDetailPage() {
       setEMinStock(String(itemRes.minStock || 0))
       setEMaxStock(String(itemRes.maxStock || 0))
       setELocation(itemRes.location || '')
+      setESellingPrice(String(itemRes.sellingPrice ?? 0))
     } catch (e) { console.error(e) }
     setLoading(false)
   }
@@ -89,6 +91,7 @@ export default function StockItemDetailPage() {
           name: eName, sku: eSku, category: eCategory, description: eDescription,
           unit: eUnit, vatRate: parseFloat(eVatRate), minStock: parseInt(eMinStock),
           maxStock: parseInt(eMaxStock), location: eLocation,
+          sellingPrice: parseFloat(eSellingPrice) || 0,
         }),
       })
       if (!res.ok) throw new Error('Chyba pri ukladaní')
@@ -216,6 +219,7 @@ export default function StockItemDetailPage() {
                       </select>
                     </div>
                     <div><label className="block text-xs font-semibold text-gray-500 mb-1">DPH (%)</label><input type="number" value={eVatRate} onChange={e => setEVatRate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
+                    <div><label className="block text-xs font-semibold text-gray-500 mb-1">Predajná cena bez DPH (€)</label><input type="number" min="0" step="0.01" value={eSellingPrice} onChange={e => setESellingPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
                     <div><label className="block text-xs font-semibold text-gray-500 mb-1">Umiestnenie (polica/miestnosť)</label><input value={eLocation} onChange={e => setELocation(e.target.value)} placeholder="napr. Polica A3" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
                     <div><label className="block text-xs font-semibold text-gray-500 mb-1">Min. stav</label><input type="number" value={eMinStock} onChange={e => setEMinStock(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
                     <div><label className="block text-xs font-semibold text-gray-500 mb-1">Max. stav</label><input type="number" value={eMaxStock} onChange={e => setEMaxStock(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
@@ -233,7 +237,7 @@ export default function StockItemDetailPage() {
                     {[
                       { label: 'Aktuálny stav',    value: `${item.currentStock} ${item.unit}`, color: item.minStock > 0 && item.currentStock <= item.minStock ? 'text-orange-600' : 'text-gray-900' },
                       { label: 'Avg. nák. cena',   value: fmt(item.avgPurchasePrice) + ' €',   color: 'text-gray-900' },
-                      { label: 'Posl. predaj. c.',  value: item.lastSalePrice > 0 ? fmt(item.lastSalePrice) + ' €' : '—', color: 'text-gray-900' },
+                      { label: 'Predajná cena',     value: item.sellingPrice > 0 ? fmt(item.sellingPrice) + ' €' : '—', color: 'text-sycom-600' },
                       { label: 'Hodnota skladu',   value: fmt(item.currentStock * item.avgPurchasePrice) + ' €', color: 'text-sycom-600' },
                     ].map(s => (
                       <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center">

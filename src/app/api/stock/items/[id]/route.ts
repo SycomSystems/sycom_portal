@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json()
   const { name, sku, category, description, unit, vatRate, minStock, maxStock,
-          location, serialTracking } = body
+          location, serialTracking, sellingPrice } = body
 
   const item = await prisma.stockItem.update({
     where: { id: params.id },
@@ -59,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(maxStock    !== undefined && { maxStock:       Number(maxStock) }),
       ...(location    !== undefined && { location:       location?.trim() || null }),
       ...(serialTracking !== undefined && { serialTracking: Boolean(serialTracking) }),
+      ...(sellingPrice  !== undefined && { sellingPrice:  Number(sellingPrice) }),
     },
   })
 
