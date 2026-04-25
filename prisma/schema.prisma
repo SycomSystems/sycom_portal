@@ -122,6 +122,7 @@ model StockItem {
   avgPurchasePrice  Float     @default(0)
   lastPurchasePrice Float     @default(0)
   lastSalePrice     Float     @default(0)
+  sellingPrice      Float     @default(0)
   serialTracking    Boolean   @default(false)
   supplierPrices    SupplierPrice[]
   serialNumbers     SerialNumber[]
