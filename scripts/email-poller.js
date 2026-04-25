@@ -1,178 +1,400 @@
+/**
+ * email-poller.js
+ * Runs as a PM2 process. Every 2 minutes it:
+ *   1. Reads IMAP settings from the DB
+ *   2. Connects to the Exchange mailbox via IMAP
+ *   3. For each UNSEEN email:
+ *      - Resolves the CREATOR from the sender (From:) email address:
+ *          a) Sender email matches an existing User → use that user
+ *          b) Not found → check AllowedDomain whitelist
+ *             - Domain NOT in whitelist → skip (log + mark seen)
+ *             - Domain in whitelist → auto-create Client + User,
+ *               send welcome email to new user, notify admin
+ *      - Resolves the CLIENT from emailAlias (To: address) or creator's clientId
+ *      - Auto-assigns technician from ClientTechnician if available
+ *      - Creates a ticket (HIGH if subject contains "urgent", otherwise MEDIUM)
+ *      - Saves attachments to /opt/sycom-portal/public/uploads/attachments/
+ *      - Marks the email as SEEN
+ *
+ * Install deps (once):
+ *   cd /opt/sycom-portal
+ *   npm install imapflow mailparser nodemailer bcryptjs
+ *
+ * Start with PM2:
+ *   pm2 start scripts/email-poller.js --name email-poller
+ *   pm2 save
+ */
+
 'use strict'
+
 const { ImapFlow }     = require('imapflow')
 const { simpleParser } = require('mailparser')
 const { PrismaClient } = require('@prisma/client')
-const fs   = require('fs')
-const path = require('path')
-const zlib = require('zlib')
+const nodemailer       = require('nodemailer')
+const fs               = require('fs')
+const path             = require('path')
+const crypto           = require('crypto')
+const bcrypt           = require('bcryptjs')
 
-const prisma        = new PrismaClient()
-const POLL_INTERVAL = 2 * 60 * 1000
-const ATT_DIR       = '/opt/sycom-portal/public/uploads/attachments'
-const LOG_DIR       = '/opt/sycom-portal/logs'
+const prisma = new PrismaClient()
+const POLL_INTERVAL   = 2 * 60 * 1000
+const ATTACHMENTS_DIR = '/opt/sycom-portal/public/uploads/attachments'
+const PORTAL_URL      = process.env.NEXTAUTH_URL || 'https://portal.sycom.sk'
 
-// ── Logging ────────────────────────────────────────────────────────────────
-function log(level, msg) {
-  const ts  = new Date().toISOString()
-  const tag = level === 'error' ? '\x1b[31m' : level === 'warn' ? '\x1b[33m' : '\x1b[36m'
-  console.log(`${tag}[poller][${level}]\x1b[0m ${msg}`)
-  try {
-    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
-    const ym  = ts.substring(0, 7)
-    const file = path.join(LOG_DIR, `poller-${ym}.jsonl`)
-    fs.appendFileSync(file, JSON.stringify({ ts, level, msg }) + '\n')
-  } catch (e) { console.error('log write error:', e.message) }
+// ─── SLA helper ──────────────────────────────────────────────────────────────
+function slaDeadline(priority) {
+  const hours = { LOW: 24, MEDIUM: 8, HIGH: 4, CRITICAL: 2 }
+  return new Date(Date.now() + (hours[priority] ?? 8) * 60 * 60 * 1000)
 }
 
-// ── Monthly compression + 365-day cleanup ─────────────────────────────────
-function maintainLogs() {
-  try {
-    if (!fs.existsSync(LOG_DIR)) return
-    const now       = new Date()
-    const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    const cutoff    = new Date(Date.now() - 365 * 24 * 3600 * 1000)
-
-    for (const file of fs.readdirSync(LOG_DIR)) {
-      const filePath = path.join(LOG_DIR, file)
-      const match    = file.match(/poller-(\d{4}-\d{2})/)
-      if (!match) continue
-      const ym       = match[1]
-      const fileDate = new Date(ym + '-01')
-
-      // delete anything older than 365 days (both .jsonl and .jsonl.gz)
-      if (fileDate < cutoff) {
-        fs.unlinkSync(filePath)
-        log('info', `Deleted old log: ${file}`)
-        continue
-      }
-
-      // compress previous months that are still uncompressed
-      if (file.endsWith('.jsonl') && ym !== currentYm) {
-        const gzPath = filePath + '.gz'
-        if (!fs.existsSync(gzPath)) {
-          const compressed = zlib.gzipSync(fs.readFileSync(filePath))
-          fs.writeFileSync(gzPath, compressed)
-          fs.unlinkSync(filePath)
-          log('info', `Compressed ${file}`)
-        }
-      }
-    }
-  } catch (e) { log('warn', 'Log maintenance error: ' + e.message) }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-function sla(p) {
-  return new Date(Date.now() + ({ LOW: 24, MEDIUM: 8, HIGH: 4, CRITICAL: 2 }[p] ?? 8) * 3600000)
-}
-
+// ─── Load IMAP settings from DB ──────────────────────────────────────────────
 async function loadSettings() {
   const rows = await prisma.setting.findMany({
-    where: { key: { in: ['email_imap_host','email_imap_port','email_imap_secure','email_imap_user','email_imap_pass','email_imap_enabled'] } }
+    where: {
+      key: {
+        in: [
+          'email_imap_host', 'email_imap_port', 'email_imap_secure',
+          'email_imap_user', 'email_imap_pass', 'email_imap_enabled',
+        ],
+      },
+    },
   })
-  return Object.fromEntries(rows.map(r => [r.key, r.value]))
+  const s = {}
+  for (const r of rows) s[r.key] = r.value
+  return s
 }
 
-// ── Process one email ──────────────────────────────────────────────────────
-async function processMessage(imap, msg) {
-  const p     = await simpleParser(msg.source)
-  const addrs = [p.to?.value ?? []].flat().map(a => a.address?.toLowerCase()).filter(Boolean)
-  log('info', `Processing email — To: [${addrs.join(', ')}], Subject: "${p.subject || '(none)'}"`)
-
-  let client = null
-  for (const a of addrs) {
-    client = await prisma.client.findFirst({ where: { emailAlias: a } })
-    if (client) break
-  }
-
-  if (!client) {
-    log('warn', `No alias match for [${addrs.join(', ')}] — skipping`)
-    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
-    return
-  }
-
-  let creator = await prisma.user.findFirst({ where: { clientId: client.id }, orderBy: { createdAt: 'asc' } })
-  if (!creator) {
-    log('warn', `No user for client "${client.name}" — falling back to admin`)
-    creator = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } })
-  }
-  if (!creator) {
-    log('warn', 'No admin user found — skipping')
-    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
-    return
-  }
-
-  const subject  = (p.subject || '(bez predmetu)').substring(0, 200)
-  const priority = subject.toLowerCase().includes('urgent') ? 'HIGH' : 'MEDIUM'
-  let   desc     = (p.text || '').trim() || (p.html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || '(bez obsahu)'
-
-  const ticket = await prisma.ticket.create({
-    data: { subject, description: desc, priority, category: 'EMAIL', clientId: client.id, creatorId: creator.id, slaDeadline: sla(priority) }
+// ─── Nodemailer transporter from env vars ────────────────────────────────────
+function createTransporter() {
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
   })
-  log('info', `✓ Created ticket #${ticket.ticketNumber} — "${subject}" for "${client.name}"`)
+}
 
-  if (p.attachments?.length) {
-    if (!fs.existsSync(ATT_DIR)) fs.mkdirSync(ATT_DIR, { recursive: true })
-    for (const a of p.attachments) {
+// ─── Welcome email to auto-created user ──────────────────────────────────────
+async function sendWelcomeEmail(email, plainPassword) {
+  if (!process.env.SMTP_HOST) {
+    console.log(`[poller] SMTP not configured — skipping welcome email to ${email}`)
+    return
+  }
+  try {
+    const transporter = createTransporter()
+    await transporter.sendMail({
+      from:    process.env.SMTP_FROM || process.env.SMTP_USER,
+      to:      email,
+      subject: 'Váš prístup do Sycom IT Portálu',
+      text: [
+        'Dobrý deň,',
+        '',
+        'Váš email bol zaznamenaný v našom systéme a bol Vám automaticky vytvorený prístup do Sycom IT Portálu.',
+        '',
+        `Portál:             ${PORTAL_URL}`,
+        `Prihlasovacie meno: ${email}`,
+        `Heslo:              ${plainPassword}`,
+        '',
+        'Po prvom prihlásení si odporúčame heslo zmeniť v nastaveniach profilu.',
+        '',
+        'S pozdravom,',
+        'Sycom Systems',
+      ].join('\n'),
+    })
+    console.log(`[poller] Welcome email sent to ${email}`)
+  } catch (err) {
+    console.error(`[poller] Failed to send welcome email to ${email}:`, err.message)
+  }
+}
+
+// ─── Admin notification about auto-created user ───────────────────────────────
+async function sendAdminNotification(newUserEmail, clientName) {
+  if (!process.env.SMTP_HOST) return
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { email: true },
+    })
+    if (admins.length === 0) return
+
+    const transporter = createTransporter()
+    await transporter.sendMail({
+      from:    process.env.SMTP_FROM || process.env.SMTP_USER,
+      to:      admins.map(a => a.email).join(', '),
+      subject: `[Portál] Nový auto-vytvorený používateľ: ${newUserEmail}`,
+      text: [
+        'Dobrý deň,',
+        '',
+        'Z prichádzajúceho emailu bol automaticky vytvorený nový používateľ a klient:',
+        '',
+        `Používateľ: ${newUserEmail}`,
+        `Klient:     ${clientName}`,
+        '',
+        'Používateľ ešte nemá priradeného zodpovedného technika.',
+        'Skontrolujte a priraďte ho v admin sekcii:',
+        `${PORTAL_URL}/admin/clients`,
+        '',
+        'Sycom Portal',
+      ].join('\n'),
+    })
+    console.log(`[poller] Admin notified about new user ${newUserEmail}`)
+  } catch (err) {
+    console.error('[poller] Failed to send admin notification:', err.message)
+  }
+}
+
+// ─── Extract To: addresses ────────────────────────────────────────────────────
+function toAddresses(parsed) {
+  const addrs = []
+  const raw = parsed.to
+  if (!raw) return addrs
+  const values = Array.isArray(raw.value) ? raw.value : [raw.value]
+  for (const v of values) {
+    if (v && v.address) addrs.push(v.address.toLowerCase().trim())
+  }
+  return addrs
+}
+
+// ─── Extract From: address ────────────────────────────────────────────────────
+function getFromAddress(parsed) {
+  const raw = parsed.from
+  if (!raw) return null
+  const values = Array.isArray(raw.value) ? raw.value : [raw.value]
+  for (const v of values) {
+    if (v && v.address) return v.address.toLowerCase().trim()
+  }
+  return null
+}
+
+// ─── Resolve or auto-create creator from sender email ────────────────────────
+// Returns { user } or null if the sender is rejected
+async function resolveCreator(senderEmail) {
+  // a) Known user?
+  const existing = await prisma.user.findFirst({
+    where: { email: senderEmail },
+    include: { client: true },
+  })
+  if (existing) {
+    console.log(`[poller] Sender ${senderEmail} matched existing user: ${existing.name}`)
+    return { user: existing }
+  }
+
+  // b) Unknown — check domain whitelist
+  const domain = senderEmail.split('@')[1]
+  if (!domain) {
+    console.log(`[poller] Invalid sender "${senderEmail}" — skipping`)
+    return null
+  }
+
+  const allowed = await prisma.allowedDomain.findUnique({ where: { domain } })
+  if (!allowed) {
+    console.log(`[poller] Domain "${domain}" not in whitelist — rejecting ${senderEmail}`)
+    return null
+  }
+
+  // c) Allowed domain — auto-create Client + User
+  console.log(`[poller] Auto-creating account for ${senderEmail} (domain: ${domain})`)
+
+  const plainPassword  = crypto.randomBytes(8).toString('base64url').slice(0, 12)
+  const hashedPassword = await bcrypt.hash(plainPassword, 12)
+
+  // Create client from domain name
+  const newClient = await prisma.client.create({
+    data: { name: domain },
+  })
+
+  const newUser = await prisma.user.create({
+    data: {
+      email:    senderEmail,
+      name:     senderEmail,
+      password: hashedPassword,
+      role:     'CLIENT',
+      clientId: newClient.id,
+      isActive: true,
+    },
+    include: { client: true },
+  })
+
+  console.log(`[poller] Created user ${newUser.id} + client ${newClient.id} for domain ${domain}`)
+
+  // Fire-and-forget — don't block ticket creation
+  sendWelcomeEmail(senderEmail, plainPassword).catch(() => {})
+  sendAdminNotification(senderEmail, domain).catch(() => {})
+
+  return { user: newUser }
+}
+
+// ─── Process a single IMAP message ───────────────────────────────────────────
+async function processMessage(imap, msg) {
+  const parsed   = await simpleParser(msg.source)
+  const sender   = getFromAddress(parsed)
+  const toAddrs  = toAddresses(parsed)
+
+  // ── 1. Resolve creator ────────────────────────────────────────────────────
+  if (!sender) {
+    console.log('[poller] No sender address — skipping')
+    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
+    return
+  }
+
+  const creatorResult = await resolveCreator(sender)
+  if (!creatorResult) {
+    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
+    return
+  }
+  const creator = creatorResult.user
+
+  // ── 2. Resolve client ─────────────────────────────────────────────────────
+  // Priority: emailAlias match → creator's client
+  let matchedClient = null
+  for (const addr of toAddrs) {
+    matchedClient = await prisma.client.findFirst({ where: { emailAlias: addr } })
+    if (matchedClient) break
+  }
+  if (!matchedClient && creator.clientId) {
+    matchedClient = await prisma.client.findUnique({ where: { id: creator.clientId } })
+  }
+
+  if (!matchedClient) {
+    console.log(`[poller] No client resolved for ${sender} — skipping`)
+    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
+    return
+  }
+
+  // ── 3. Subject + priority ─────────────────────────────────────────────────
+  const subject  = (parsed.subject || '(bez predmetu)').substring(0, 200)
+  const priority = subject.toLowerCase().includes('urgent') ? 'HIGH' : 'MEDIUM'
+
+  let description = (parsed.text || '').trim()
+  if (!description && parsed.html) {
+    description = parsed.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+  if (!description) description = '(bez obsahu)'
+
+  // ── 4. Auto-assign technician from ClientTechnician ──────────────────────
+  const techAssignment = await prisma.clientTechnician.findFirst({
+    where:   { clientId: matchedClient.id },
+    orderBy: { userId: 'asc' },
+  })
+
+  // ── 5. Create ticket ──────────────────────────────────────────────────────
+  const ticket = await prisma.ticket.create({
+    data: {
+      subject,
+      description,
+      priority,
+      category:    'EMAIL',
+      clientId:    matchedClient.id,
+      creatorId:   creator.id,
+      assigneeId:  techAssignment?.userId ?? null,
+      slaDeadline: slaDeadline(priority),
+    },
+  })
+
+  console.log(`[poller] Ticket #${ticket.ticketNumber} created — "${subject}" | client: ${matchedClient.name} | creator: ${sender}`)
+
+  // ── 6. Save attachments ───────────────────────────────────────────────────
+  if (parsed.attachments && parsed.attachments.length > 0) {
+    if (!fs.existsSync(ATTACHMENTS_DIR)) {
+      fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true })
+    }
+    for (const att of parsed.attachments) {
       try {
-        const fn = `${ticket.id}-${Date.now()}-${(a.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')}`
-        fs.writeFileSync(path.join(ATT_DIR, fn), a.content)
+        const safeName = (att.filename || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_')
+        const filename = `${ticket.id}-${Date.now()}-${safeName}`
+        fs.writeFileSync(path.join(ATTACHMENTS_DIR, filename), att.content)
         await prisma.attachment.create({
-          data: { ticketId: ticket.id, filename: a.filename || 'file', fileUrl: `/uploads/attachments/${fn}`, fileSize: a.size ?? a.content.length, mimeType: a.contentType || 'application/octet-stream' }
+          data: {
+            ticketId: ticket.id,
+            filename: att.filename || 'attachment',
+            fileUrl:  `/uploads/attachments/${filename}`,
+            fileSize: att.size ?? att.content.length,
+            mimeType: att.contentType || 'application/octet-stream',
+          },
         })
-        log('info', `  + attachment saved: ${fn}`)
-      } catch (e) { log('error', 'Attachment save failed: ' + e.message) }
+        console.log(`[poller]   + attachment: ${filename}`)
+      } catch (err) {
+        console.error('[poller] Failed to save attachment:', err.message)
+      }
     }
   }
 
+  // ── 7. Mark as read ───────────────────────────────────────────────────────
   await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
 }
 
-// ── Poll cycle ─────────────────────────────────────────────────────────────
+// ─── Main poll cycle ──────────────────────────────────────────────────────────
 async function poll() {
-  const s = await loadSettings()
-  if (s.email_imap_enabled !== 'true') { log('info', 'Poller disabled — skipping'); return }
+  const settings = await loadSettings()
+
+  if (settings['email_imap_enabled'] !== 'true') {
+    console.log('[poller] Disabled — skipping cycle.')
+    return
+  }
 
   const imap = new ImapFlow({
-    host: s.email_imap_host, port: +s.email_imap_port || 993,
-    secure: s.email_imap_secure === 'true',
-    auth: { user: s.email_imap_user, pass: s.email_imap_pass },
-    logger: false
+    host:   settings['email_imap_host'],
+    port:   parseInt(settings['email_imap_port'] || '993'),
+    secure: settings['email_imap_secure'] === 'true',
+    auth: {
+      user: settings['email_imap_user'],
+      pass: settings['email_imap_pass'],
+    },
+    logger: false,
   })
 
   try {
     await imap.connect()
-    log('info', `Connected to IMAP (${s.email_imap_host})`)
+    console.log('[poller] Connected to IMAP.')
+
     const lock = await imap.getMailboxLock('INBOX')
     try {
       const uids = await imap.search({ seen: false })
-      log('info', `Found ${uids.length} unseen message(s)`)
-      if (uids.length) {
-        // Collect all messages first — modifying flags inside fetch loop corrupts the stream
-        const messages = []
-        for await (const msg of imap.fetch(uids, { source: true })) {
-          messages.push({ seq: msg.seq, source: msg.source })
-        }
-        log('info', `Collected ${messages.length} message(s) — processing...`)
-        for (const msg of messages) {
-          try { await processMessage(imap, msg) } catch (e) { log('error', 'Message error: ' + e.message) }
+      console.log(`[poller] Found ${uids.length} unseen message(s).`)
+
+      if (uids.length > 0) {
+        for await (const msg of imap.fetch(uids, { source: true, envelope: true })) {
+          try {
+            await processMessage(imap, msg)
+          } catch (err) {
+            console.error('[poller] Error processing message:', err.message)
+          }
         }
       }
-    } finally { lock.release() }
+    } finally {
+      lock.release()
+    }
+
     await imap.logout()
-    log('info', 'Disconnected from IMAP')
-  } catch (e) {
-    log('error', 'IMAP connection error: ' + e.message)
+    console.log('[poller] Disconnected.')
+  } catch (err) {
+    console.error('[poller] IMAP error:', err.message)
     try { await imap.logout() } catch {}
   }
-
-  maintainLogs()
 }
 
-// ── Entry point ────────────────────────────────────────────────────────────
+// ─── Entry point ─────────────────────────────────────────────────────────────
 async function main() {
-  log('info', `Poller started — interval: ${POLL_INTERVAL / 1000}s`)
-  if (!fs.existsSync(ATT_DIR)) fs.mkdirSync(ATT_DIR, { recursive: true })
+  console.log('[poller] Starting email → ticket poller.')
+  console.log(`[poller] Poll interval: ${POLL_INTERVAL / 1000}s`)
+
+  if (!fs.existsSync(ATTACHMENTS_DIR)) {
+    fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true })
+  }
+
   await poll()
-  setInterval(() => poll().catch(e => log('error', 'Unhandled: ' + e.message)), POLL_INTERVAL)
+
+  setInterval(async () => {
+    try { await poll() } catch (err) {
+      console.error('[poller] Unhandled error in poll():', err.message)
+    }
+  }, POLL_INTERVAL)
 }
-main().catch(e => { log('error', 'Fatal: ' + e.message); process.exit(1) })
+
+main().catch((err) => {
+  console.error('[poller] Fatal:', err)
+  process.exit(1)
+})

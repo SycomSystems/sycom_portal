@@ -361,3 +361,12 @@ model ClientTechnician {
   @@id([clientId, userId])
   @@map("client_technicians")
 }
+
+model AllowedDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@map("allowed_domains")
+}
