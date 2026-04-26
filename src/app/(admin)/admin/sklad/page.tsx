@@ -272,7 +272,7 @@ export default function SkladPage() {
     if (!buyItemName.trim() || !buyQty || !buyPrice) return
     setBuySubmitting(true)
     try {
-      const stockItemId = buyIsNew ? `NEW:${buyItemName.trim()}` : buyItemId
+      const stockItemId = (buyIsNew || !buyItemId) ? `NEW:${buyItemName.trim()}` : buyItemId
       const res = await fetch('/api/stock/movements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
