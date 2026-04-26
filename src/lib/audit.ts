@@ -5,14 +5,21 @@ export async function logAudit(
   entityType: string,
   entityId: string,
   action: string,
-  oldValue?: string | null,
-  newValue?: string | null
+  oldValue?: any,
+  newValue?: any
 ) {
   try {
     await prisma.auditLog.create({
-      data: { userId, entityType, entityId, action, oldValue: oldValue ?? null, newValue: newValue ?? null },
+      data: {
+        userId,
+        entityType,
+        entityId,
+        action,
+        oldValue: oldValue != null ? JSON.stringify(oldValue) : null,
+        newValue: newValue != null ? JSON.stringify(newValue) : null,
+      },
     })
-  } catch (err: any) {
-    console.error('[audit] logAudit failed:', err.message)
+  } catch (e) {
+    console.error('[audit] Failed to write audit log:', e)
   }
 }

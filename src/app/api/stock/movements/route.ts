@@ -1,3 +1,4 @@
+import { logAudit } from '@/lib/audit'
 // src/app/api/stock/movements/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -174,6 +175,8 @@ export async function POST(req: NextRequest) {
     await prisma.stockItem.update({ where: { id: finalStockItemId }, data: updates })
   }
 
+  await logAudit(userId, 'stockMovement', movement.id, movement.type,
+    null, { stockItemId: finalStockItemId, quantity: qty, pricePerUnit: price, type })
   return NextResponse.json(movement, { status: 201 })
 }
 
