@@ -4234,3 +4234,24 @@
 {"ts":"2026-04-26T19:40:36.682Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
 {"ts":"2026-04-26T19:40:36.831Z","level":"info","msg":"Found 0 unseen message(s)"}
 {"ts":"2026-04-26T19:40:36.850Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:42:36.662Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:42:36.819Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:42:36.840Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:44:36.707Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:44:37.073Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:44:37.093Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:46:36.770Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:46:36.940Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:46:36.960Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:48:36.769Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:48:36.918Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:48:36.938Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:50:36.730Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:50:36.880Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:50:36.902Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:52:36.801Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:52:36.949Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:52:36.968Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:54:36.692Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:54:36.872Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:54:36.891Z","level":"info","msg":"Disconnected from IMAP"}
