@@ -106,7 +106,7 @@ export default function SkladPage() {
   const [buyIsNew, setBuyIsNew] = useState(false)
   const [buyQty, setBuyQty] = useState('')
   const [buyPrice, setBuyPrice] = useState('')
-  const [buyVat, setBuyVat] = useState('20')
+  const [buyVat, setBuyVat] = useState('23')
   const [buySupplierId, setBuySupplierId] = useState('')
   const [buySupplierName, setBuySupplierName] = useState('')
   const [buyDate, setBuyDate] = useState(new Date().toISOString().slice(0, 10))
@@ -298,7 +298,7 @@ export default function SkladPage() {
 
   function resetBuyForm() {
     setBuyItemId(''); setBuyItemName(''); setBuyIsNew(false); setBuyQty(''); setBuyPrice('')
-    setBuyVat('20'); setBuySupplierId(''); setBuySupplierName(''); setBuyNote(''); setBuyInvoice('')
+    setBuyVat('23'); setBuySupplierId(''); setBuySupplierName(''); setBuyNote(''); setBuyInvoice('')
     setBuyDate(new Date().toISOString().slice(0, 10)); setBuySelectedItem(null)
     setBuySellingPrice('')
   }
@@ -689,7 +689,7 @@ export default function SkladPage() {
             <div className="p-4 space-y-4">
               <Autocomplete label="Tovar" value={sellItemName}
                 onChange={v => { setSellItemName(v); setSellItemId(''); setSellSelectedItem(null); setSellPrice('') }}
-                onSelect={(id, name, extra) => { setSellItemId(id); setSellItemName(name); setSellSelectedItem(extra as StockItem); const sp = (extra as StockItem)?.sellingPrice; if (sp && sp > 0) setSellPrice(String(sp)) }}
+                onSelect={(id, name, extra) => { const it = extra as StockItem; setSellItemId(id); setSellItemName(name); setSellSelectedItem(it); const sp = it?.sellingPrice ?? 0; const avg = it?.avgPurchasePrice ?? 0; if (sp > 0) setSellPrice(sp.toFixed(2)); setSellMarkup(avg > 0 && sp > 0 ? ((sp - avg) / avg * 100).toFixed(1) : '0') }}
                 suggestions={itemSuggestions.filter(i => { const item = items.find(x => x.id === i.id); return (item?.currentStock ?? 0) > 0 })}
                 placeholder="Hľadať tovar na sklade..." required
               />
@@ -709,10 +709,10 @@ export default function SkladPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">Množstvo *</label><input type="number" min="0.01" step="0.01" value={sellQty} onChange={e => setSellQty(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
-                <div><label className="block text-xs font-semibold text-gray-500 mb-1">Prirážka (%)</label><input type="number" min="0" value={sellMarkup} onChange={e => setSellMarkup(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
+                <div><label className="block text-xs font-semibold text-gray-500 mb-1">Prirážka (%)</label><input type="number" min="0" value={sellMarkup} onChange={e => { setSellMarkup(e.target.value); const mu = parseFloat(e.target.value) || 0; const avg = sellSelectedItem?.avgPurchasePrice ?? 0; if (avg > 0) setSellPrice((avg * (1 + mu / 100)).toFixed(2)) }} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
               </div>
               <div><label className="block text-xs font-semibold text-gray-500 mb-1">Predajná cena/ks bez DPH (€) *</label>
-                <input type="number" min="0" step="0.01" value={sellPrice} onChange={e => setSellPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/>
+                <input type="number" min="0" step="0.01" value={sellPrice} onChange={e => { setSellPrice(e.target.value); const price = parseFloat(e.target.value) || 0; const avg = sellSelectedItem?.avgPurchasePrice ?? 0; if (avg > 0 && price > 0) setSellMarkup(((price - avg) / avg * 100).toFixed(1)) }} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
