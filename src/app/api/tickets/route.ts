@@ -1,3 +1,4 @@
+import { logAudit } from '@/lib/audit'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -153,5 +154,6 @@ export async function POST(req: NextRequest) {
     ).catch(() => {})
   }
 
-  return NextResponse.json(ticket, { status: 201 })
+  await logAudit(userId, 'ticket', ticket.id, 'CREATE', null, { subject: ticket.subject, clientId: ticket.clientId })
+    return NextResponse.json(ticket, { status: 201 })
 }

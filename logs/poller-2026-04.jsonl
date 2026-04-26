@@ -4258,3 +4258,12 @@
 {"ts":"2026-04-26T19:56:36.783Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
 {"ts":"2026-04-26T19:56:36.977Z","level":"info","msg":"Found 0 unseen message(s)"}
 {"ts":"2026-04-26T19:56:36.997Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T19:58:36.707Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T19:58:36.847Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T19:58:36.866Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T20:00:36.745Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T20:00:36.949Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T20:00:36.968Z","level":"info","msg":"Disconnected from IMAP"}
+{"ts":"2026-04-26T20:02:36.727Z","level":"info","msg":"Connected to IMAP (mail.sycom.sk)"}
+{"ts":"2026-04-26T20:02:36.926Z","level":"info","msg":"Found 0 unseen message(s)"}
+{"ts":"2026-04-26T20:02:36.946Z","level":"info","msg":"Disconnected from IMAP"}
