@@ -178,11 +178,10 @@ export default function SkladPage() {
 
   // Auto-fill sell price from avg purchase price
   useEffect(() => {
-    if (sellSelectedItem && sellSelectedItem.avgPurchasePrice > 0) {
-      const mu = Number(sellMarkup || 20)
-      setSellPrice((sellSelectedItem.avgPurchasePrice * (1 + mu / 100)).toFixed(2))
-    }
-  }, [sellMarkup, sellSelectedItem])
+    if (!sellSelectedItem || !sellSelectedItem.avgPurchasePrice) return
+    const mu = Number(sellMarkup || 0)
+    setSellPrice((sellSelectedItem.avgPurchasePrice * (1 + mu / 100)).toFixed(2))
+  }, [sellMarkup])
 
   // Auto-fill buy price from preferred supplier
   useEffect(() => {
