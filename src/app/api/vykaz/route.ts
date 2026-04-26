@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   })
 
   // 3. Stock SELL movements
-  const movementWhere: any = { type: 'SELL', date: { gte: dateFrom, lte: dateTo } }
+  const movementWhere: any = { type: 'SELL', date: { gte: dateFrom, lte: dateTo }, NOT: { note: { startsWith: 'Tiket #' } } }
   if (clientId) movementWhere.clientId = clientId
   const movements = await prisma.stockMovement.findMany({
     where: movementWhere,
