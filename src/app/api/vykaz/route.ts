@@ -65,6 +65,20 @@ export async function GET(req: NextRequest) {
     orderBy: { date: 'asc' },
   })
 
+  // 3b. TicketStockUsage — materiál z tiketov
+  const usageWhere: any = { createdAt: { gte: dateFrom, lte: dateTo } }
+  if (clientId) usageWhere.ticket = { clientId }
+  if (role === 'AGENT' && !clientId) usageWhere.ticket = { clientId: { in: agentClientIds } }
+  const ticketUsages = await prisma.ticketStockUsage.findMany({
+    where: usageWhere,
+    include: {
+      stockItem: true,
+      ticket: { select: { id: true, ticketNumber: true, subject: true, clientId: true, client: { select: { id: true, name: true } } } },
+      createdBy: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+
   // 4. Client pricing map
   const clientPricing = clientId
     ? await prisma.clientPricing.findMany({ where: { clientId } })
@@ -118,16 +132,38 @@ export async function GET(req: NextRequest) {
   const allHourRows = [...ticketHourRows, ...manualHourRows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // 7. Goods rows
-  const goodsRows = movements.map(m => ({
+  const sellRows = movements.map(m => ({
     date: m.date,
     itemName: m.stockItem.name,
+    sku: m.stockItem.sku,
     quantity: m.quantity,
     pricePerUnit: m.pricePerUnit,
     totalPrice: m.totalPrice,
     vatRate: m.vatRate,
     addedBy: m.addedBy.name,
     client: m.client,
+    ticketId: null as string | null,
+    ticketNumber: null as number | null,
+    note: null as string | null,
   }))
+  const usageRows = ticketUsages.map(u => {
+    const price = u.stockItem.sellingPrice ?? 0
+    return {
+      date: u.createdAt,
+      itemName: u.stockItem.name,
+      sku: u.stockItem.sku,
+      quantity: u.qty,
+      pricePerUnit: price,
+      totalPrice: Math.round(price * u.qty * 100) / 100,
+      vatRate: u.stockItem.vatRate,
+      addedBy: u.createdBy.name,
+      client: u.ticket.client,
+      ticketId: u.ticket.id,
+      ticketNumber: u.ticket.ticketNumber,
+      note: u.note,
+    }
+  })
+  const goodsRows = [...sellRows, ...usageRows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // 8. Summary
   const hoursByType: Record<string, number> = {}

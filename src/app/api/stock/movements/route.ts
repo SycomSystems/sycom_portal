@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
       },
     })
     finalStockItemId = item.id
+    if (newItemSellingPrice && Number(newItemSellingPrice) > 0) {
+      await prisma.stockItem.update({ where: { id: item.id }, data: { sellingPrice: Number(newItemSellingPrice) } })
+    }
   }
 
   const qty   = Number(quantity)
@@ -150,6 +153,9 @@ export async function POST(req: NextRequest) {
         updates.avgPurchasePrice = ((item.avgPurchasePrice * item.currentStock) + (price * qty)) / totalBought
       }
       updates.lastPurchasePrice = price
+      if (newItemSellingPrice && Number(newItemSellingPrice) > 0) {
+        updates.sellingPrice = Number(newItemSellingPrice)
+      }
 
       // Update supplier price list
       if (finalSupplierId) {
