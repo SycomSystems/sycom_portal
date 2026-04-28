@@ -68,6 +68,7 @@ model Client {
   pricing        ClientPricing[]
   stockMovements StockMovement[]
   manualHours    ManualHours[]
+  recurringTickets  RecurringTicket[]
   @@map("clients")
   emailAlias     String?         @unique
   technicians    ClientTechnician[]
@@ -191,6 +192,8 @@ model User {
   sessions        Session[]
   stockMovements  StockMovement[]
   manualHours     ManualHours[]
+  recurringAssigned   RecurringTicket[] @relation("RecurringAssigned")
+  recurringCreated    RecurringTicket[] @relation("RecurringCreated")
   @@map("users")
   assignedClients      ClientTechnician[]
   auditLogs            AuditLog[]
@@ -214,7 +217,7 @@ model Team {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   members     TeamMember[]
-  tickets     Ticket[]
+  tickets           Ticket[]
   @@map("teams")
 }
 
@@ -419,4 +422,27 @@ model TicketStockUsage {
   createdBy   User      @relation(fields: [createdById], references: [id])
 
   @@map("ticket_stock_usages")
+}
+
+model RecurringTicket {
+  id           String    @id @default(cuid())
+  subject      String
+  description  String?   @db.Text
+  clientId     String?
+  assignedToId String?
+  priority     String    @default("MEDIUM")
+  scheduleType String    // INTERVAL | WEEKDAY | MONTHDAY
+  intervalDays Int?
+  weekday      Int?
+  monthDay     Int?
+  isActive     Boolean   @default(true)
+  nextRunAt    DateTime
+  lastRunAt    DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  client       Client?   @relation(fields: [clientId], references: [id])
+  assignedTo   User?     @relation("RecurringAssigned", fields: [assignedToId], references: [id])
+  createdBy    User      @relation("RecurringCreated", fields: [createdById], references: [id])
+  @@map("recurring_tickets")
 }
