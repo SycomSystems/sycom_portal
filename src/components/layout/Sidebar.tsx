@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug, RefreshCw } from 'lucide-react'
+import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug, RefreshCw, ClipboardList } from 'lucide-react'
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
 
@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/recurring', label: 'Opakujúce sa', icon: <RefreshCw size={16} />, roles: ['ADMIN'] },
+  { href: '/admin/recurring-reports', label: 'Op. výkazy', icon: <ClipboardList size={16} />, roles: ['ADMIN'] },
     { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
   { href: '/admin/debug', label: 'Debug', icon: <Bug size={16} />, roles: ['ADMIN'] },
