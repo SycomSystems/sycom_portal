@@ -24,11 +24,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()
-  const { name, hoursType, hours, note, isService, assignedUserId, clientId, scheduleType, intervalDays, weekday, monthDay, isActive, nextRunAt } = body
+  const { name, hoursType, hours, quantity, unitPrice, note, isService, assignedUserId, clientId, scheduleType, intervalDays, weekday, monthDay, isActive, nextRunAt } = body
   const upd: any = {}
   if (name !== undefined) upd.name = name
   if (hoursType !== undefined) upd.hoursType = hoursType
   if (hours !== undefined) upd.hours = Number(hours)
+  if (quantity !== undefined) upd.quantity = Number(quantity)
+  if (unitPrice !== undefined) upd.unitPrice = Number(unitPrice)
   if (note !== undefined) upd.note = note
   if (isService !== undefined) upd.isService = isService
   if (assignedUserId !== undefined) upd.userId = assignedUserId
