@@ -433,6 +433,56 @@ async function processRecurringTickets() {
   }
 }
 
+
+// ─── Recurring reports ────────────────────────────────────────────────────────
+async function processRecurringReports() {
+  try {
+    const now = new Date()
+    const due = await prisma.recurringReport.findMany({
+      where: { isActive: true, nextRunAt: { lte: now } },
+    })
+    if (due.length === 0) return
+    console.log(`[recurring-reports] Processing ${due.length} report(s)`)
+    for (const rr of due) {
+      try {
+        await prisma.manualHours.create({
+          data: {
+            date: now,
+            name: rr.name,
+            hoursType: rr.hoursType,
+            hours: rr.hours,
+            userId: rr.userId,
+            clientId: rr.clientId,
+          },
+        })
+        // calc next run
+        const base = new Date()
+        let nextRun
+        if (rr.scheduleType === 'INTERVAL') {
+          nextRun = new Date(base); nextRun.setDate(nextRun.getDate() + (rr.intervalDays || 7))
+        } else if (rr.scheduleType === 'WEEKDAY' && rr.weekday != null) {
+          nextRun = new Date(base); nextRun.setHours(7, 0, 0, 0)
+          const diff = (rr.weekday - nextRun.getDay() + 7) % 7 || 7; nextRun.setDate(nextRun.getDate() + diff)
+        } else if (rr.scheduleType === 'MONTHDAY' && rr.monthDay != null) {
+          nextRun = new Date(base); nextRun.setHours(7, 0, 0, 0); nextRun.setDate(rr.monthDay)
+          if (nextRun <= base) nextRun.setMonth(nextRun.getMonth() + 1)
+        } else {
+          nextRun = new Date(base); nextRun.setDate(nextRun.getDate() + 7)
+        }
+        await prisma.recurringReport.update({
+          where: { id: rr.id },
+          data: { lastRunAt: now, nextRunAt: nextRun },
+        })
+        console.log(`[recurring-reports] Created ManualHours for "${rr.name}"`)
+      } catch (e) {
+        console.error(`[recurring-reports] Error for "${rr.name}":`, e.message)
+      }
+    }
+  } catch (e) {
+    console.error('[recurring-reports] Fatal:', e.message)
+  }
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 async function main() {
   console.log('[poller] Starting email → ticket poller.')
