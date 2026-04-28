@@ -455,6 +455,8 @@ model RecurringReport {
   name         String
   hoursType    String    @default("práca")
   hours        Float
+  quantity     Float     @default(1)
+  unitPrice    Float     @default(0)
   note         String?
   isService    Boolean   @default(false)
   userId       String

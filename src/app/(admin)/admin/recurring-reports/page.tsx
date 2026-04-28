@@ -14,7 +14,7 @@ interface RecurringTicket {
 }
 interface RecurringReport {
   id: string; name: string; hoursType: string; hours: number; note: string | null
-  isService: boolean; isActive: boolean; scheduleType: string; intervalDays: number | null
+  isService: boolean; quantity: number; unitPrice: number; isActive: boolean; scheduleType: string; intervalDays: number | null
   weekday: number | null; monthDay: number | null; nextRunAt: string; lastRunAt: string | null
   user: { id: string; name: string }
   client: { id: string; name: string } | null
@@ -37,7 +37,7 @@ function scheduleLabel(r:{scheduleType:string;intervalDays:number|null;weekday:n
 }
 
 const emptyTF = {subject:'',description:'',priority:'MEDIUM',assignedToId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
-const emptyRF = {name:'',hoursType:'práca',hours:1,note:'',isService:false,assignedUserId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
+const emptyRF = {name:'',hoursType:'práca',hours:1,quantity:1,unitPrice:0,note:'',isService:false,assignedUserId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
 
 type Tab = 'tickets'|'work'|'service'
 
@@ -159,13 +159,13 @@ export default function RecurringReportsPage() {
   function openCreateReport(isService:boolean){setEditRId(null);setRf({...emptyRF,isService,firstRunAt:nextDay(20)});setShowRM(true)}
   function openEditReport(r:RecurringReport){
     setEditRId(r.id)
-    setRf({name:r.name,hoursType:r.hoursType,hours:r.hours,note:r.note??'',isService:r.isService,assignedUserId:r.user.id,clientId:r.client?.id??'',scheduleType:r.scheduleType,intervalDays:r.intervalDays??7,weekday:r.weekday??0,monthDay:r.monthDay??1,firstRunAt:r.nextRunAt?new Date(r.nextRunAt).toISOString().slice(0,16):''})
+    setRf({name:r.name,hoursType:r.hoursType,hours:r.hours,quantity:r.quantity??1,unitPrice:r.unitPrice??0,note:r.note??'',isService:r.isService,assignedUserId:r.user.id,clientId:r.client?.id??'',scheduleType:r.scheduleType,intervalDays:r.intervalDays??7,weekday:r.weekday??0,monthDay:r.monthDay??1,firstRunAt:r.nextRunAt?new Date(r.nextRunAt).toISOString().slice(0,16):''})
     setShowRM(true)
   }
   async function saveReport(){
     if(!rf.name.trim()||!rf.assignedUserId)return
     setSaving(true)
-    const body={name:rf.name.trim(),hoursType:rf.hoursType,hours:Number(rf.hours),note:rf.note||null,isService:rf.isService,assignedUserId:rf.assignedUserId,clientId:rf.clientId||null,scheduleType:rf.scheduleType,intervalDays:rf.scheduleType==='INTERVAL'?Number(rf.intervalDays):null,weekday:rf.scheduleType==='WEEKDAY'?Number(rf.weekday):null,monthDay:rf.scheduleType==='MONTHDAY'?Number(rf.monthDay):null,firstRunAt:rf.firstRunAt||null}
+    const body={name:rf.name.trim(),hoursType:rf.hoursType,hours:Number(rf.hours),quantity:Number(rf.quantity),unitPrice:Number(rf.unitPrice),note:rf.note||null,isService:rf.isService,assignedUserId:rf.assignedUserId,clientId:rf.clientId||null,scheduleType:rf.scheduleType,intervalDays:rf.scheduleType==='INTERVAL'?Number(rf.intervalDays):null,weekday:rf.scheduleType==='WEEKDAY'?Number(rf.weekday):null,monthDay:rf.scheduleType==='MONTHDAY'?Number(rf.monthDay):null,firstRunAt:rf.firstRunAt||null}
     await fetch(editRId?`/api/admin/recurring-reports/${editRId}`:'/api/admin/recurring-reports',{method:editRId?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     setSaving(false);setShowRM(false);load()
   }
@@ -295,7 +295,7 @@ export default function RecurringReportsPage() {
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                   <tr>
                     <th className={thCls}>Názov</th><th className={thCls}>Klient</th><th className={thCls}>Technik</th>
-                    <th className={thCls}>Hodiny</th><th className={thCls}>Plán</th><th className={thCls}>Ďalší beh</th>
+                    <th className={thCls}>Hodiny</th><th className={thCls}>Cena</th><th className={thCls}>Spolu</th><th className={thCls}>Plán</th><th className={thCls}>Ďalší beh</th>
                     <th className={thCls}>Aktívny</th><th className="px-4 py-3 text-right">Akcie</th>
                   </tr>
                 </thead>
@@ -309,6 +309,8 @@ export default function RecurringReportsPage() {
                       <td className={`${tdCls} text-gray-600`}>{r.client?.name??'—'}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.user.name}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.hours}h{!r.isService&&<span className="ml-1 text-xs text-gray-400">({r.hoursType})</span>}</td>
+                      <td className={`${tdCls} text-gray-600`}>{r.isService?`${r.quantity}× ${r.unitPrice.toFixed(2)}€`:'—'}</td>
+                      <td className={`${tdCls} font-medium text-gray-800`}>{r.isService?(r.quantity*r.unitPrice).toFixed(2)+'€':'—'}</td>
                       <td className={tdCls}>
                         <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
                           <Clock size={10}/>{scheduleLabel(r)}
@@ -425,6 +427,22 @@ export default function RecurringReportsPage() {
                   </select>
                 </div>}
               </div>
+              {rf.isService&&<div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Počet</label>
+                  <input type="number" min="0" step="0.01" value={rf.quantity} onChange={e=>setRf(f=>({...f,quantity:parseFloat(e.target.value)||0}))} className={inputCls}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Cena / MJ (€)</label>
+                  <input type="number" min="0" step="0.01" value={rf.unitPrice} onChange={e=>setRf(f=>({...f,unitPrice:parseFloat(e.target.value)||0}))} className={inputCls}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Spolu</label>
+                  <div className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800">
+                    {(rf.quantity*rf.unitPrice).toFixed(2)} €
+                  </div>
+                </div>
+              </div>}
               <ScheduleFields form={rf} setForm={setRf}/>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Poznámka</label>

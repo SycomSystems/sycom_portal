@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const userId = (session.user as any).id
   const body = await req.json()
-  const { name, hoursType, hours, note, isService, assignedUserId, clientId, scheduleType, intervalDays, weekday, monthDay, firstRunAt } = body
+  const { name, hoursType, hours, quantity, unitPrice, note, isService, assignedUserId, clientId, scheduleType, intervalDays, weekday, monthDay, firstRunAt } = body
   if (!name?.trim()) return NextResponse.json({ error: 'Názov je povinný' }, { status: 400 })
   if (!scheduleType) return NextResponse.json({ error: 'Typ plánu je povinný' }, { status: 400 })
   if (!assignedUserId) return NextResponse.json({ error: 'Technik je povinný' }, { status: 400 })
