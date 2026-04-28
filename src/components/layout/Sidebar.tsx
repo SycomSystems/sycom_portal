@@ -11,7 +11,6 @@ interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
   { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} /> },
-  { href: '/tickets/new', label: 'Novy tiket', icon: <Plus size={16} /> },
   { href: '/kb', label: 'Znalostna baza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/users', label: 'Pouzivatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
   { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
