@@ -1,7 +1,7 @@
 'use client'
 // src/components/layout/Topbar.tsx
 import { useSession, signOut } from 'next-auth/react'
-import { Bell, ChevronDown, LogOut, User, Settings, Ticket, X } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, User, Settings, Ticket, X, Menu } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 
@@ -10,7 +10,7 @@ type Notif = {
   isRead: boolean; createdAt: string; ticketId: string | null
 }
 
-export function Topbar() {
+export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { data: session } = useSession()
   const [menuOpen, setMenuOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
@@ -80,6 +80,14 @@ export function Topbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 h-[62px] bg-white border-b border-gray-200 flex items-center px-6 gap-4 z-40">
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={onMenuToggle}
+        className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors -ml-1 mr-1"
+        aria-label="Menu"
+      >
+        <Menu size={20} />
+      </button>
       {/* Logo */}
       <div className="flex items-center gap-2.5">
         {logoUrl ? (
