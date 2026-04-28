@@ -228,7 +228,7 @@ export default function TicketDetailPage() {
     </PortalLayout>
   if (!ticket || ticket.error) return (
     <PortalLayout>
-      <div className="max-w-3xl mx-auto py-8 px-6 text-center">
+      <div className="max-w-3xl mx-auto py-4 md:py-8 px-4 md:px-6 text-center">
         <p className="text-gray-500">Tiket sa nenasel.</p>
         <button onClick={() => router.back()} className="mt-4 text-sm text-sycom-500 hover:underline">← Spat</button>
                 </div>
@@ -247,12 +247,12 @@ export default function TicketDetailPage() {
 
   return (
     <PortalLayout>
-      <div className="max-w-4xl mx-auto py-8 px-6">
+      <div className="max-w-4xl mx-auto py-4 md:py-8 px-4 md:px-6">
         <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-sycom-500 mb-5 transition-colors">
           <ArrowLeft size={15} /> Spat na tikety
         </button>
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
-          <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 mb-4 md:mb-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="font-mono text-xs font-bold text-sycom-500">#T-{ticket.ticketNumber}</span>
