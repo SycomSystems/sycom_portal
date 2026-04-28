@@ -24,7 +24,12 @@ interface User { id: string; name: string; email: string }
 interface Client { id: string; name: string }
 
 const WEEKDAYS = ['Nedeľa','Pondelok','Utorok','Streda','Štvrtok','Piatok','Sobota']
-const HOURS_TYPES = ['práca','pohotovosť','služobná cesta','dovolenka','PN']
+const HOURS_TYPES = [
+  { value: 'STANDARD', label: 'Standard' },
+  { value: 'STANDARD_MIMO', label: 'Standard mimo prac. casu' },
+  { value: 'SERVER', label: 'Server' },
+  { value: 'SERVER_MIMO', label: 'Server mimo prac. casu' },
+]
 const PRIORITIES = ['LOW','MEDIUM','HIGH','URGENT']
 const PRIORITY_LABELS: Record<string,string> = {LOW:'Nízka',MEDIUM:'Stredná',HIGH:'Vysoká',URGENT:'Urgentná'}
 const PRIORITY_COLORS: Record<string,string> = {LOW:'bg-gray-100 text-gray-600',MEDIUM:'bg-blue-100 text-blue-700',HIGH:'bg-orange-100 text-orange-700',URGENT:'bg-red-100 text-red-700'}
@@ -37,7 +42,7 @@ function scheduleLabel(r:{scheduleType:string;intervalDays:number|null;weekday:n
 }
 
 const emptyTF = {subject:'',description:'',priority:'MEDIUM',assignedToId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
-const emptyRF = {name:'',hoursType:'práca',hours:1,quantity:1,unitPrice:0,note:'',isService:false,assignedUserId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
+const emptyRF = {name:'',hoursType:'STANDARD',hours:1,quantity:1,unitPrice:0,note:'',isService:false,assignedUserId:'',clientId:'',scheduleType:'WEEKDAY',intervalDays:7,weekday:0,monthDay:1,firstRunAt:''}
 
 type Tab = 'tickets'|'work'|'service'
 
@@ -308,7 +313,7 @@ export default function RecurringReportsPage() {
                       </td>
                       <td className={`${tdCls} text-gray-600`}>{r.client?.name??'—'}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.user.name}</td>
-                      <td className={`${tdCls} text-gray-600`}>{r.hours}h{!r.isService&&<span className="ml-1 text-xs text-gray-400">({r.hoursType})</span>}</td>
+                      <td className={`${tdCls} text-gray-600`}>{r.hours}h{!r.isService&&<span className="ml-1 text-xs text-gray-400">({HOURS_TYPES.find(t=>t.value===r.hoursType)?.label??r.hoursType})</span>}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.isService?`${r.quantity}× ${r.unitPrice.toFixed(2)}€`:'—'}</td>
                       <td className={`${tdCls} font-medium text-gray-800`}>{r.isService?(r.quantity*r.unitPrice).toFixed(2)+'€':'—'}</td>
                       <td className={tdCls}>
@@ -423,7 +428,7 @@ export default function RecurringReportsPage() {
                 {!rf.isService&&<div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Typ hodín</label>
                   <select value={rf.hoursType} onChange={e=>setRf(f=>({...f,hoursType:e.target.value}))} className={inputCls}>
-                    {HOURS_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                    {HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>}
               </div>
