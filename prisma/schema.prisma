@@ -69,6 +69,7 @@ model Client {
   stockMovements StockMovement[]
   manualHours    ManualHours[]
   recurringTickets  RecurringTicket[]
+  recurringReports  RecurringReport[] @relation("RecurringReportClient")
   @@map("clients")
   emailAlias     String?         @unique
   technicians    ClientTechnician[]
@@ -194,6 +195,8 @@ model User {
   manualHours     ManualHours[]
   recurringAssigned   RecurringTicket[] @relation("RecurringAssigned")
   recurringCreated    RecurringTicket[] @relation("RecurringCreated")
+  recurringReportUser    RecurringReport[] @relation("RecurringReportUser")
+  recurringReportCreated RecurringReport[] @relation("RecurringReportCreated")
   @@map("users")
   assignedClients      ClientTechnician[]
   auditLogs            AuditLog[]
@@ -445,4 +448,29 @@ model RecurringTicket {
   assignedTo   User?     @relation("RecurringAssigned", fields: [assignedToId], references: [id])
   createdBy    User      @relation("RecurringCreated", fields: [createdById], references: [id])
   @@map("recurring_tickets")
+}
+
+model RecurringReport {
+  id           String    @id @default(cuid())
+  name         String
+  hoursType    String    @default("práca")
+  hours        Float
+  note         String?
+  isService    Boolean   @default(false)
+  userId       String
+  clientId     String?
+  scheduleType String
+  intervalDays Int?
+  weekday      Int?
+  monthDay     Int?
+  isActive     Boolean   @default(true)
+  nextRunAt    DateTime
+  lastRunAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String
+  user         User      @relation("RecurringReportUser", fields: [userId], references: [id])
+  client       Client?   @relation("RecurringReportClient", fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy    User      @relation("RecurringReportCreated", fields: [createdById], references: [id])
+  @@map("recurring_reports")
 }
