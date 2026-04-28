@@ -376,6 +376,63 @@ async function poll() {
   }
 }
 
+
+// ─── Recurring tickets ───────────────────────────────────────────────────────
+async function processRecurringTickets() {
+  try {
+    const now = new Date()
+    const due = await prisma.recurringTicket.findMany({
+      where: { isActive: true, nextRunAt: { lte: now } },
+    })
+    if (due.length === 0) return
+    console.log(`[recurring] Processing ${due.length} recurring ticket(s)`)
+    for (const rt of due) {
+      try {
+        const ticket = await prisma.ticket.create({
+          data: {
+            subject: rt.subject,
+            description: rt.description ?? '',
+            status: 'OPEN',
+            priority: rt.priority,
+            clientId: rt.clientId,
+            creatorId: rt.createdById,
+            assigneeId: rt.assignedToId,
+          },
+        })
+        // calc next run
+        const base = new Date()
+        let nextRun
+        if (rt.scheduleType === 'INTERVAL') {
+          nextRun = new Date(base)
+          nextRun.setDate(nextRun.getDate() + (rt.intervalDays || 7))
+        } else if (rt.scheduleType === 'WEEKDAY' && rt.weekday != null) {
+          nextRun = new Date(base)
+          nextRun.setHours(7, 0, 0, 0)
+          const diff = (rt.weekday - nextRun.getDay() + 7) % 7 || 7
+          nextRun.setDate(nextRun.getDate() + diff)
+        } else if (rt.scheduleType === 'MONTHDAY' && rt.monthDay != null) {
+          nextRun = new Date(base)
+          nextRun.setHours(7, 0, 0, 0)
+          nextRun.setDate(rt.monthDay)
+          if (nextRun <= base) nextRun.setMonth(nextRun.getMonth() + 1)
+        } else {
+          nextRun = new Date(base)
+          nextRun.setDate(nextRun.getDate() + 7)
+        }
+        await prisma.recurringTicket.update({
+          where: { id: rt.id },
+          data: { lastRunAt: now, nextRunAt: nextRun },
+        })
+        console.log(`[recurring] Created ticket #${ticket.ticketNumber} from recurring "${rt.subject}"`)
+      } catch (e) {
+        console.error(`[recurring] Error for "${rt.subject}":`, e.message)
+      }
+    }
+  } catch (e) {
+    console.error('[recurring] Fatal error:', e.message)
+  }
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 async function main() {
   console.log('[poller] Starting email → ticket poller.')
