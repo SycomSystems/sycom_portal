@@ -4,10 +4,9 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, Plus, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug, RefreshCw, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, Ticket, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug, ClipboardList } from 'lucide-react'
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
-
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
   { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} /> },
@@ -17,12 +16,14 @@ const navItems: NavItem[] = [
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/recurring-reports', label: 'Op. záznamy', icon: <ClipboardList size={16} />, roles: ['ADMIN'] },
-    { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
+  { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
   { href: '/admin/debug', label: 'Debug', icon: <Bug size={16} />, roles: ['ADMIN'] },
 ]
 
-export function Sidebar() {
+interface SidebarProps { isOpen?: boolean; onClose?: () => void }
+
+export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role ?? 'CLIENT'
@@ -41,11 +42,21 @@ export function Sidebar() {
     return () => clearInterval(interval)
   }, [role])
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => { onClose?.() }, [pathname])
+
   const visibleItems = navItems.filter(item => !item.roles || item.roles.includes(role))
 
   return (
-    <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-gray-100">
-      
+    <aside className={cn(
+      'w-60 shrink-0 flex flex-col bg-white border-r border-gray-100 transition-transform duration-200',
+      // Mobile: fixed drawer
+      'fixed top-[62px] bottom-0 left-0 z-40',
+      // Desktop: sticky, always visible
+      'md:sticky md:top-0 md:h-screen md:z-auto md:translate-x-0',
+      // Mobile open/close
+      isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+    )}>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
