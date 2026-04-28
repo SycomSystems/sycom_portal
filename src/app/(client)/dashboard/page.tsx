@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
         {/* Charts + Recent — staff only */}
         {isStaff && (
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
             {/* Bar chart — tickets per day */}
             <div className="card">
@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
         {/* SLA + Recent Tickets — staff only */}
         {isStaff && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
             {/* SLA */}
             <div className="card">
