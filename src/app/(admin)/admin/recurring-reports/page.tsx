@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import PortalLayout from '@/components/layout/PortalLayout'
+import { PortalLayout } from '@/components/layout/PortalLayout'
 import { Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Clock, Repeat } from 'lucide-react'
 
 interface RecurringReport {
