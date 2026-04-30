@@ -121,29 +121,37 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  import('@/lib/email').then(async ({ sendTicketCreated, sendTicketAssigned }) => {
+  ;(async () => {
+    const { sendTicketCreated, sendTicketAssigned } = await import('@/lib/email')
+    // Email klientovi (potvrdenie)
     if (ticket.creator?.email) {
-      sendTicketCreated(ticket.creator!.email!, {
+      sendTicketCreated(ticket.creator.email, {
         ticketNumber: ticket.ticketNumber,
         subject:      ticket.subject,
         priority:     ticket.priority,
         category:     ticket.category,
       }).catch(() => {})
     }
+    // Email agentovi (pridelenie)
     if (resolvedAssigneeId) {
-      const assignee = await prisma.user.findUnique({
-        where: { id: resolvedAssigneeId },
-        select: { email: true, name: true },
-      })
+      const assignee = await prisma.user.findUnique({ where: { id: resolvedAssigneeId }, select: { email: true, name: true } })
       if (assignee?.email) {
-        sendTicketAssigned(assignee.email, {
+        sendTicketAssigned(assignee.email, { ticketNumber: ticket.ticketNumber, subject: ticket.subject, agentName: assignee.name ?? '' }).catch(() => {})
+      }
+    }
+    // Email adminovi (notifikacia o novom tikete)
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
+    for (const admin of admins) {
+      if (admin.email && admin.id !== userId) {
+        sendTicketCreated(admin.email, {
           ticketNumber: ticket.ticketNumber,
           subject:      ticket.subject,
-          agentName:    assignee.name ?? '',
+          priority:     ticket.priority,
+          category:     ticket.category,
         }).catch(() => {})
       }
     }
-  }).catch(() => {})
+  })().catch(() => {})
 
   // In-app notifikacia pre technika
   if (resolvedAssigneeId) {

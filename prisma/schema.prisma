@@ -70,6 +70,7 @@ model Client {
   manualHours    ManualHours[]
   recurringTickets  RecurringTicket[]
   recurringReports  RecurringReport[] @relation("RecurringReportClient")
+  orders              Order[]
   @@map("clients")
   emailAlias     String?         @unique
   technicians    ClientTechnician[]
@@ -196,6 +197,7 @@ model User {
   manualHours     ManualHours[]
   recurringAssigned   RecurringTicket[] @relation("RecurringAssigned")
   recurringCreated    RecurringTicket[] @relation("RecurringCreated")
+  ordersCreated       Order[]          @relation("OrderCreator")
   recurringReportUser    RecurringReport[] @relation("RecurringReportUser")
   recurringReportCreated RecurringReport[] @relation("RecurringReportCreated")
   @@map("users")
@@ -478,4 +480,41 @@ model RecurringReport {
   client       Client?   @relation("RecurringReportClient", fields: [clientId], references: [id], onDelete: SetNull)
   createdBy    User      @relation("RecurringReportCreated", fields: [createdById], references: [id])
   @@map("recurring_reports")
+}
+
+enum OrderStatus {
+  DOPYT
+  PONUKA_ODOSLANA
+  SCHVALENA
+  ZAMIETNUTA
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber Int         @unique @default(autoincrement())
+  status      OrderStatus @default(DOPYT)
+  clientNote  String?     @db.Text
+  adminNote   String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  creatorId   String
+  clientId    String?
+  creator     User        @relation("OrderCreator", fields: [creatorId], references: [id])
+  client      Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  name       String
+  quantity   Float
+  unit       String?
+  clientNote String?
+  unitPrice  Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@map("order_items")
 }

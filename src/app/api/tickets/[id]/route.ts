@@ -102,41 +102,48 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       team: { select: { id: true, name: true } },
     },
   })
-  import('@/lib/email').then(({ sendTicketAssigned, sendTicketResolved, sendTicketStatusChanged, sendNewComment }) => {
-    // Zmena assignee
+  ;(async () => {
+    const { sendTicketAssigned, sendTicketResolved, sendTicketStatusChanged, sendNewComment } = await import('@/lib/email')
+    const adminUsers = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
+
+    function getRecipients() {
+      const map = new Map<string, { email: string; name: string }>()
+      for (const a of adminUsers) {
+        if (a.email && a.id !== userId) map.set(a.email, { email: a.email, name: a.name ?? 'Admin' })
+      }
+      if (updated.assignee?.email && updated.assignee.id !== userId)
+        map.set(updated.assignee.email, { email: updated.assignee.email, name: updated.assignee.name ?? '' })
+      if (updated.creator?.email && updated.creator.id !== userId)
+        map.set(updated.creator.email, { email: updated.creator.email, name: updated.creator.name ?? '' })
+      return Array.from(map.values())
+    }
+
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
       sendTicketAssigned(updated.assignee.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, agentName: updated.assignee.name ?? '' }).catch(() => {})
     }
-    // Zmena stavu — RESOLVED
-    if (isResolving && updated.creator?.email) {
-      sendTicketResolved(updated.creator.email, { ticketNumber: updated.ticketNumber, subject: updated.subject }).catch(() => {})
+    if (isResolving) {
+      for (const r of getRecipients()) {
+        sendTicketResolved(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject }).catch(() => {})
+      }
     }
-    // Zmena stavu — IN_PROGRESS alebo CLOSED
     const statusChanged = status && status !== ticket.status && status !== 'RESOLVED'
-    if (statusChanged && (status === 'IN_PROGRESS' || status === 'CLOSED') && updated.creator?.email) {
-      sendTicketStatusChanged(updated.creator.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status }).catch(() => {})
+    if (statusChanged && (status === 'IN_PROGRESS' || status === 'CLOSED')) {
+      for (const r of getRecipients()) {
+        sendTicketStatusChanged(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status }).catch(() => {})
+      }
     }
-    // Novy komentar — notifikovat druhú stranu (len verejny)
     if (commentBody && !isInternal) {
-      const authorId = (updated as any).authorId
-      const recipients: { email: string; name: string }[] = []
-      if (updated.creator?.email && updated.creator.id !== userId) {
-        recipients.push({ email: updated.creator.email, name: updated.creator.name ?? '' })
-      }
-      if (updated.assignee?.email && updated.assignee.id !== userId) {
-        recipients.push({ email: updated.assignee.email, name: updated.assignee.name ?? '' })
-      }
+      const recipients = getRecipients()
       if (recipients.length > 0) {
-        const authorName = (session.user as any).name ?? 'Neznamy'
         sendNewComment(recipients, {
           ticketNumber: updated.ticketNumber,
           subject: updated.subject,
-          commentAuthor: authorName,
+          commentAuthor: (session.user as any).name ?? 'Neznámy',
           commentText: commentBody,
         }).catch(() => {})
       }
     }
-  }).catch(() => {})
+  })().catch(() => {})
 
   // Audit log
   const auditUserId = userId
