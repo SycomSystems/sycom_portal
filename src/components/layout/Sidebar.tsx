@@ -4,26 +4,33 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Ticket, BookOpen, Users, BarChart2, Settings, Phone, Building2, Package, FileText, Bug, ClipboardList } from 'lucide-react'
+import {
+  LayoutDashboard, Ticket, BookOpen, Users, BarChart2,
+  Settings, Phone, Building2, Package, FileText, Bug, ClipboardList
+} from 'lucide-react'
 
-interface NavItem { href: string; label: string; icon: React.ReactNode; roles?: string[] }
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ReactNode
+  roles?: string[]
+}
+
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/tickets', label: 'Tikety', icon: <Ticket size={16} /> },
-  { href: '/kb', label: 'Znalostna baza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/users', label: 'Pouzivatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
+  { href: '/kb', label: 'Znalostná báza', icon: <BookOpen size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/users', label: 'Používatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
   { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
-  { href: '/admin/reports/vykaz', label: 'Vykaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/admin/reports/vykaz', label: 'Výkaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/recurring-reports', label: 'Op. záznamy', icon: <ClipboardList size={16} />, roles: ['ADMIN'] },
   { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },
   { href: '/settings', label: 'Nastavenia', icon: <Settings size={16} />, roles: ['ADMIN'] },
   { href: '/admin/debug', label: 'Debug', icon: <Bug size={16} />, roles: ['ADMIN'] },
 ]
 
-interface SidebarProps { isOpen?: boolean; onClose?: () => void }
-
-export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role ?? 'CLIENT'
@@ -36,26 +43,24 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   useEffect(() => {
     if (role !== 'ADMIN' && role !== 'AGENT') return
-    const fetchBadge = () => { fetch('/api/tickets/badge').then(r => r.json()).then(d => setTicketBadge(d.count ?? 0)).catch(() => {}) }
+    const fetchBadge = () => {
+      fetch('/api/tickets/badge').then(r => r.json()).then(d => setTicketBadge(d.count ?? 0)).catch(() => {})
+    }
     fetchBadge()
     const interval = setInterval(fetchBadge, 30000)
     return () => clearInterval(interval)
   }, [role])
 
-  // Close sidebar on route change (mobile)
   useEffect(() => { onClose?.() }, [pathname])
 
   const visibleItems = navItems.filter(item => !item.roles || item.roles.includes(role))
 
   return (
     <aside className={cn(
-      'w-60 shrink-0 flex flex-col bg-white border-r border-gray-100 transition-transform duration-200',
-      // Mobile: fixed drawer
-      'fixed top-[62px] bottom-0 left-0 z-40',
-      // Desktop: sticky, always visible
-      'md:sticky md:top-0 md:h-screen md:z-auto md:translate-x-0',
-      // Mobile open/close
-      isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      'w-60 flex flex-col bg-white border-r border-gray-100',
+      'fixed top-[62px] bottom-0 z-40 transition-all duration-200',
+      'md:left-0',
+    isOpen ? 'left-0' : '-left-60'
     )}>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {
@@ -64,9 +69,14 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           const active = (item.href !== '/admin/reports' && isActive) || isReportsActive
           const showBadge = item.href === '/tickets' && ticketBadge > 0
           return (
-            <Link key={item.href} href={item.href}
-              className={cn('flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                active ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                active ? 'bg-sycom-50 text-sycom-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+              )}
+            >
               <span className="flex items-center gap-3">
                 <span className={cn('shrink-0', active ? 'text-sycom-500' : 'text-gray-400')}>{item.icon}</span>
                 {item.label}

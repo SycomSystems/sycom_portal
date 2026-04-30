@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
         client:   { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true } },
         team:     { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
       },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],

@@ -100,13 +100,15 @@ export default function TicketsPage() {
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Stav</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Priorita</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Vytvorené</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Zadal</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Naposledy upravil</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                <tr><td colSpan={6} className="px-5 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
+                <tr><td colSpan={8} className="px-5 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
               ) : tickets.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
               ) : tickets.map((t: any) => (
                 <tr key={t.id} className="hover:bg-sycom-50 transition-colors">
                   <td className="px-5 py-3.5">
@@ -133,6 +135,8 @@ export default function TicketsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-gray-400">{formatDateTime(t.createdAt)}</td>
+                <td className="px-5 py-3.5 text-xs text-gray-500">{t.creator?.name ?? '—'}</td>
+                <td className="px-5 py-3.5">{t.updatedBy ? <div><p className="text-xs text-gray-700 font-medium">{t.updatedBy.name}</p><p className="text-[11px] text-gray-400">{formatDateTime(t.updatedAt)}</p></div> : <span className="text-xs text-gray-300">—</span>}</td>
                 </tr>
               ))}
             </tbody>

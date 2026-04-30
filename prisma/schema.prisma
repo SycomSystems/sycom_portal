@@ -187,6 +187,7 @@ model User {
   client          Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   ticketsCreated  Ticket[]     @relation("TicketCreator")
   ticketsAssigned Ticket[]     @relation("TicketAssignee")
+  ticketsUpdated  Ticket[]     @relation("TicketUpdater")
   comments        Comment[]
   teamMemberships TeamMember[]
   notifications   Notification[]
@@ -257,6 +258,8 @@ model Ticket {
   assignee      User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
   team          Team?          @relation(fields: [teamId], references: [id])
   client        Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  updatedById String?
+  updatedBy   User?   @relation("TicketUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
   comments      Comment[]
   attachments   Attachment[]
   notifications Notification[]
