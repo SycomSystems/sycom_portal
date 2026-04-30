@@ -1,8 +1,12 @@
 // src/app/layout.tsx
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Providers } from '@/components/layout/Providers'
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
 export const metadata: Metadata = {
   title: 'Sycom IT Podpora',
   description: 'IT Support Portal — Sycom s.r.o.',

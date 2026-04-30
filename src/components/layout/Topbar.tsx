@@ -79,7 +79,7 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[62px] bg-white border-b border-gray-200 flex items-center px-6 gap-4 z-40">
+    <header className="fixed top-0 left-0 right-0 h-[62px] bg-white border-b border-gray-200 flex items-center px-6 gap-4 z-50">
       {/* Hamburger — mobile only */}
       <button
         onClick={onMenuToggle}
@@ -111,11 +111,6 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* System status */}
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          Vsetky systemy funguju
-        </div>
 
         {/* Bell */}
         <div className="relative" ref={bellRef}>
@@ -195,7 +190,7 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
             <div className="w-7 h-7 rounded-full bg-sycom-500 text-white text-xs font-bold flex items-center justify-center">
               {initials}
             </div>
-            <span className="text-xs font-semibold text-gray-800 pr-1">{session?.user?.name}</span>
+            <span className="hidden md:inline text-xs font-semibold text-gray-800 pr-1">{session?.user?.name}</span>
             <ChevronDown size={14} className="text-gray-400" />
           </button>
           {menuOpen && (

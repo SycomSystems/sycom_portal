@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const ticket = await prisma.ticket.findUnique({
     where: { id: params.id },
     include: {
+      updatedBy: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
@@ -83,6 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (assigneeId !== undefined) updates.assigneeId = assigneeId
   if (teamId !== undefined) updates.teamId = teamId
   if (isResolving) updates.resolvedAt = new Date()
+  updates.updatedById = userId
   if (isAdmin) {
     if (subject) updates.subject = subject
     if (description) updates.description = description

@@ -2,6 +2,8 @@
 // src/app/(client)/dashboard/page.tsx
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Ticket, Clock, CheckCircle, AlertTriangle, TrendingUp, Activity } from 'lucide-react'
@@ -35,6 +37,11 @@ export default function DashboardPage() {
   const { data: session } = useSession()
   const role    = (session?.user as any)?.role ?? 'CLIENT'
   const isStaff = role === 'ADMIN' || role === 'AGENT'
+  const router = useRouter()
+  useEffect(() => {
+    if (!session) return
+    if (role === 'CLIENT' || role === 'CLIENT_MANAGER') router.replace('/tickets')
+  }, [role, session, router])
 
   const { data, isLoading } = useQuery({
     queryKey: ['reports'],
