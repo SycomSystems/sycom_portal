@@ -20,7 +20,7 @@ const createSchema = z.object({
 
 async function generateTicketNumber(): Promise<number> {
   while (true) {
-    const n = Math.floor(1000000000 + Math.random() * 9000000000)
+    const n = Math.floor(100000000 + Math.random() * 900000000)
     const existing = await prisma.ticket.findUnique({ where: { ticketNumber: n } })
     if (!existing) return n
   }
