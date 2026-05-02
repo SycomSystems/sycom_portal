@@ -1,0 +1,5 @@
+{"ts":"2026-05-02T21:11:29.167Z","level":"info","msg":"[poller] Starting email → ticket poller."}
+{"ts":"2026-05-02T21:11:29.169Z","level":"info","msg":"[poller] Poll interval: 120s"}
+{"ts":"2026-05-02T21:11:29.763Z","level":"info","msg":"[poller] Connected to IMAP."}
+{"ts":"2026-05-02T21:11:29.977Z","level":"info","msg":"[poller] Found 2 unseen message(s)."}
+{"ts":"2026-05-02T21:11:30.109Z","level":"info","msg":"[poller] Reply to #16 added as comment — from: stanislav.krizek@krizkovci.com"}

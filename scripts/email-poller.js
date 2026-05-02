@@ -48,6 +48,23 @@ function slaDeadline(priority) {
 }
 
 
+
+const LOG_DIR = '/opt/sycom-portal/logs'
+function log(level, msg) {
+  const ts = new Date().toISOString()
+  const entry = JSON.stringify({ ts, level, msg })
+  // PM2 output
+  if (level === 'error') console.error(msg)
+  else console.log(msg)
+  // Structured JSON log file
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
+    const month = ts.slice(0, 7)
+    const file = path.join(LOG_DIR, `poller-${month}.json`)
+    fs.appendFileSync(file, entry + '\n')
+  } catch (_) {}
+}
+
 // ─── Generate unique 10-digit ticket number ───────────────────────────────────
 async function generateTicketNumber() {
   while (true) {
@@ -112,7 +129,7 @@ function createTransporter() {
 // ─── Welcome email to auto-created user ──────────────────────────────────────
 async function sendWelcomeEmail(email, plainPassword) {
   if (!process.env.SMTP_HOST) {
-    console.log(`[poller] SMTP not configured — skipping welcome email to ${email}`)
+    log('info', `[poller] SMTP not configured — skipping welcome email to ${email}`)
     return
   }
   try {
@@ -136,9 +153,9 @@ async function sendWelcomeEmail(email, plainPassword) {
         'Sycom Systems',
       ].join('\n'),
     })
-    console.log(`[poller] Welcome email sent to ${email}`)
+    log('info', `[poller] Welcome email sent to ${email}`)
   } catch (err) {
-    console.error(`[poller] Failed to send welcome email to ${email}:`, err.message)
+    log('error', `[poller] Failed to send welcome email to ${email}:`, err.message)
   }
 }
 
@@ -172,9 +189,9 @@ async function sendAdminNotification(newUserEmail, clientName) {
         'Sycom Portal',
       ].join('\n'),
     })
-    console.log(`[poller] Admin notified about new user ${newUserEmail}`)
+    log('info', `[poller] Admin notified about new user ${newUserEmail}`)
   } catch (err) {
-    console.error('[poller] Failed to send admin notification:', err.message)
+    log('error', '[poller] Failed to send admin notification:', err.message)
   }
 }
 
@@ -210,25 +227,25 @@ async function resolveCreator(senderEmail) {
     include: { client: true },
   })
   if (existing) {
-    console.log(`[poller] Sender ${senderEmail} matched existing user: ${existing.name}`)
+    log('info', `[poller] Sender ${senderEmail} matched existing user: ${existing.name}`)
     return { user: existing }
   }
 
   // b) Unknown — check domain whitelist
   const domain = senderEmail.split('@')[1]
   if (!domain) {
-    console.log(`[poller] Invalid sender "${senderEmail}" — skipping`)
+    log('info', `[poller] Invalid sender "${senderEmail}" — skipping`)
     return null
   }
 
   const allowed = await prisma.allowedDomain.findUnique({ where: { domain } })
   if (!allowed) {
-    console.log(`[poller] Domain "${domain}" not in whitelist — rejecting ${senderEmail}`)
+    log('info', `[poller] Domain "${domain}" not in whitelist — rejecting ${senderEmail}`)
     return null
   }
 
   // c) Allowed domain — auto-create Client + User
-  console.log(`[poller] Auto-creating account for ${senderEmail} (domain: ${domain})`)
+  log('info', `[poller] Auto-creating account for ${senderEmail} (domain: ${domain})`)
 
   const plainPassword  = crypto.randomBytes(8).toString('base64url').slice(0, 12)
   const hashedPassword = await bcrypt.hash(plainPassword, 12)
@@ -250,7 +267,7 @@ async function resolveCreator(senderEmail) {
     include: { client: true },
   })
 
-  console.log(`[poller] Created user ${newUser.id} + client ${newClient.id} for domain ${domain}`)
+  log('info', `[poller] Created user ${newUser.id} + client ${newClient.id} for domain ${domain}`)
 
   // Fire-and-forget — don't block ticket creation
   sendWelcomeEmail(senderEmail, plainPassword).catch(() => {})
@@ -285,19 +302,23 @@ async function processMessage(imap, msg) {
       }
       body = stripQuotedReply(body)
       if (!body) body = '(prázdna odpoveď)'
-      await prisma.comment.create({
-        data: { body, ticketId: existingTicket.id, authorId, isInternal: false, workedHours: 0 },
-      })
-      console.log(`[poller] Reply to #${ticketNumber} added as comment — from: ${sender}`)
+      try {
+        await prisma.comment.create({
+          data: { body, ticketId: existingTicket.id, authorId, isInternal: false, workedHours: 0 },
+        })
+        log('info', `[poller] Reply to #${ticketNumber} added as comment — from: ${sender}`)
+      } catch (e) {
+        log('error', `[poller] Failed to add comment to #${ticketNumber}:`, e.message)
+      }
       await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
       return
     }
-    console.log(`[poller] Ticket #${ticketNumber} not found — creating new ticket`)
+    log('info', `[poller] Ticket #${ticketNumber} not found — creating new ticket`)
   }
 
     // ── 1. Resolve creator ────────────────────────────────────────────────────
   if (!sender) {
-    console.log('[poller] No sender address — skipping')
+    log('info', '[poller] No sender address — skipping')
     await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
@@ -321,7 +342,7 @@ async function processMessage(imap, msg) {
   }
 
   if (!matchedClient) {
-    console.log(`[poller] No client resolved for ${sender} — skipping`)
+    log('info', `[poller] No client resolved for ${sender} — skipping`)
     await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
@@ -358,7 +379,7 @@ async function processMessage(imap, msg) {
     },
   })
 
-  console.log(`[poller] Ticket #${ticket.ticketNumber} created — "${subject}" | client: ${matchedClient.name} | creator: ${sender}`)
+  log('info', `[poller] Ticket #${ticket.ticketNumber} created — "${subject}" | client: ${matchedClient.name} | creator: ${sender}`)
 
   // ── 6. Save attachments ───────────────────────────────────────────────────
   if (parsed.attachments && parsed.attachments.length > 0) {
@@ -379,9 +400,9 @@ async function processMessage(imap, msg) {
             mimeType: att.contentType || 'application/octet-stream',
           },
         })
-        console.log(`[poller]   + attachment: ${filename}`)
+        log('info', `[poller]   + attachment: ${filename}`)
       } catch (err) {
-        console.error('[poller] Failed to save attachment:', err.message)
+        log('error', '[poller] Failed to save attachment:', err.message)
       }
     }
   }
@@ -395,7 +416,7 @@ async function poll() {
   const settings = await loadSettings()
 
   if (settings['email_imap_enabled'] !== 'true') {
-    console.log('[poller] Disabled — skipping cycle.')
+    log('info', '[poller] Disabled — skipping cycle.')
     return
   }
 
@@ -412,19 +433,19 @@ async function poll() {
 
   try {
     await imap.connect()
-    console.log('[poller] Connected to IMAP.')
+    log('info', '[poller] Connected to IMAP.')
 
     const lock = await imap.getMailboxLock('INBOX')
     try {
       const uids = await imap.search({ seen: false })
-      console.log(`[poller] Found ${uids.length} unseen message(s).`)
+      log('info', `[poller] Found ${uids.length} unseen message(s).`)
 
       if (uids.length > 0) {
         for await (const msg of imap.fetch(uids, { source: true, envelope: true })) {
           try {
             await processMessage(imap, msg)
           } catch (err) {
-            console.error('[poller] Error processing message:', err.message)
+            log('error', '[poller] Error processing message:', err.message)
           }
         }
       }
@@ -433,9 +454,9 @@ async function poll() {
     }
 
     await imap.logout()
-    console.log('[poller] Disconnected.')
+    log('info', '[poller] Disconnected.')
   } catch (err) {
-    console.error('[poller] IMAP error:', err.message)
+    log('error', '[poller] IMAP error:', err.message)
     try { await imap.logout() } catch {}
   }
 }
@@ -449,7 +470,7 @@ async function processRecurringTickets() {
       where: { isActive: true, nextRunAt: { lte: now } },
     })
     if (due.length === 0) return
-    console.log(`[recurring] Processing ${due.length} recurring ticket(s)`)
+    log('info', `[recurring] Processing ${due.length} recurring ticket(s)`)
     for (const rt of due) {
       try {
         const ticketNum = await generateTicketNumber()
@@ -489,9 +510,9 @@ async function processRecurringTickets() {
           where: { id: rt.id },
           data: { lastRunAt: now, nextRunAt: nextRun },
         })
-        console.log(`[recurring] Created ticket #${ticket.ticketNumber} from recurring "${rt.subject}"`)
+        log('info', `[recurring] Created ticket #${ticket.ticketNumber} from recurring "${rt.subject}"`)
       } catch (e) {
-        console.error(`[recurring] Error for "${rt.subject}":`, e.message)
+        log('error', `[recurring] Error for "${rt.subject}":`, e.message)
       }
     }
   } catch (e) {
@@ -508,7 +529,7 @@ async function processRecurringReports() {
       where: { isActive: true, nextRunAt: { lte: now } },
     })
     if (due.length === 0) return
-    console.log(`[recurring-reports] Processing ${due.length} report(s)`)
+    log('info', `[recurring-reports] Processing ${due.length} report(s)`)
     for (const rr of due) {
       try {
         await prisma.manualHours.create({
@@ -539,9 +560,9 @@ async function processRecurringReports() {
           where: { id: rr.id },
           data: { lastRunAt: now, nextRunAt: nextRun },
         })
-        console.log(`[recurring-reports] Created ManualHours for "${rr.name}"`)
+        log('info', `[recurring-reports] Created ManualHours for "${rr.name}"`)
       } catch (e) {
-        console.error(`[recurring-reports] Error for "${rr.name}":`, e.message)
+        log('error', `[recurring-reports] Error for "${rr.name}":`, e.message)
       }
     }
   } catch (e) {
@@ -551,8 +572,8 @@ async function processRecurringReports() {
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 async function main() {
-  console.log('[poller] Starting email → ticket poller.')
-  console.log(`[poller] Poll interval: ${POLL_INTERVAL / 1000}s`)
+  log('info', '[poller] Starting email → ticket poller.')
+  log('info', `[poller] Poll interval: ${POLL_INTERVAL / 1000}s`)
 
   if (!fs.existsSync(ATTACHMENTS_DIR)) {
     fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true })
@@ -562,12 +583,12 @@ async function main() {
 
   setInterval(async () => {
     try { await poll() } catch (err) {
-      console.error('[poller] Unhandled error in poll():', err.message)
+      log('error', '[poller] Unhandled error in poll():', err.message)
     }
   }, POLL_INTERVAL)
 }
 
 main().catch((err) => {
-  console.error('[poller] Fatal:', err)
+  log('error', '[poller] Fatal:', err)
   process.exit(1)
 })
