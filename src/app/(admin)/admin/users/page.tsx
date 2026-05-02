@@ -12,6 +12,7 @@ type User = {
   department: string | null
   phone: string | null
   isActive: boolean
+  notifyAll: boolean
   createdAt: string
   clientId: string | null
   client: { id: string; name: string } | null
@@ -21,7 +22,7 @@ type Client = { id: string; name: string }
 
 const emptyForm = {
   name: '', email: '', password: '', role: 'CLIENT' as User['role'],
-  department: '', phone: '', clientId: '',
+  department: '', phone: '', clientId: '', notifyAll: true,
 }
 
 const ROLE_LABELS: Record<User['role'], string> = {
@@ -82,7 +83,7 @@ export default function UsersPage() {
   }
 
   const openEdit = (u: User) => {
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, department: u.department || '', phone: u.phone || '', clientId: u.clientId || '' })
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, department: u.department || '', phone: u.phone || '', clientId: u.clientId || '', notifyAll: (u as any).notifyAll ?? true })
     setEditing(u)
     setModal('edit')
   }
@@ -92,7 +93,7 @@ export default function UsersPage() {
     try {
       const url = editing ? `/api/users/${editing.id}` : '/api/users'
       const method = editing ? 'PATCH' : 'POST'
-      const body: any = { name: form.name, email: form.email, role: form.role, department: form.department || null, phone: form.phone || null, clientId: form.clientId || null }
+      const body: any = { name: form.name, email: form.email, role: form.role, department: form.department || null, phone: form.phone || null, clientId: form.clientId || null, notifyAll: form.notifyAll }
       if (!editing || form.password) body.password = form.password
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Chyba') }
@@ -277,6 +278,18 @@ export default function UsersPage() {
                   </div>
                 )}
               </div>
+              {form.role === 'ADMIN' && (
+                <div className="col-span-2 flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Všetky notifikácie</p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">Ak vypnuté, admin dostáva len notifikácie pre tikety kde je priradený</p>
+                  </div>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, notifyAll: !f.notifyAll }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.notifyAll ? 'bg-sycom-500' : 'bg-gray-300'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.notifyAll ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               {modal === 'edit' && form.password && (

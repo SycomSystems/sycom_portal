@@ -104,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   })
   ;(async () => {
     const { sendTicketAssigned, sendTicketResolved, sendTicketStatusChanged, sendNewComment } = await import('@/lib/email')
-    const adminUsers = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
+    const adminUsers = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true, notifyAll: true } })
     const clientUsers = updated.clientId ? await prisma.user.findMany({
       where: { clientId: updated.clientId, role: { in: ['CLIENT', 'CLIENT_MANAGER'] } },
       select: { id: true, email: true, name: true }
@@ -112,7 +112,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     function getRecipients() {
       const map = new Map<string, { email: string; name: string }>()
       for (const a of adminUsers) {
-        if (a.email && a.id !== userId) map.set(a.email, { email: a.email, name: a.name ?? 'Admin' })
+        if (!a.email || a.id === userId) continue
+        // notifyAll:false → only notify if they are assignee or creator
+        if (!a.notifyAll) {
+          const isAssignee = updated.assignee?.id === a.id
+          const isCreator  = updated.creator?.id === a.id
+          if (!isAssignee && !isCreator) continue
+        }
+        map.set(a.email, { email: a.email, name: a.name ?? 'Admin' })
       }
       if (updated.assignee?.email && updated.assignee.id !== userId)
         map.set(updated.assignee.email, { email: updated.assignee.email, name: updated.assignee.name ?? '' })

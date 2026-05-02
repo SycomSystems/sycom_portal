@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     select: {
       id: true, name: true, email: true, role: true,
-      department: true, phone: true, isActive: true, createdAt: true,
+      department: true, phone: true, isActive: true, notifyAll: true, createdAt: true,
       clientId: true, client: { select: { id: true, name: true } },
     },
   })
@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!session || (session.user as any).role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const { name, email, password, role, department, phone, isActive, clientId } = await req.json()
+  const { name, email, password, role, department, phone, isActive, notifyAll, clientId } = await req.json()
 
   const validRoles = ['ADMIN', 'AGENT', 'CLIENT', 'CLIENT_MANAGER']
   if (role && !validRoles.includes(role)) {
@@ -43,11 +43,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(department     !== undefined && { department }),
       ...(phone          !== undefined && { phone }),
       ...(isActive       !== undefined && { isActive }),
+      ...(notifyAll      !== undefined && { notifyAll }),
       ...(clientId       !== undefined && { clientId: clientId || null }),
     },
     select: {
       id: true, name: true, email: true, role: true,
-      department: true, phone: true, isActive: true,
+      department: true, phone: true, isActive: true, notifyAll: true,
       clientId: true, client: { select: { id: true, name: true } },
     },
   })
