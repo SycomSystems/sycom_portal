@@ -105,7 +105,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   ;(async () => {
     const { sendTicketAssigned, sendTicketResolved, sendTicketStatusChanged, sendNewComment } = await import('@/lib/email')
     const adminUsers = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
-
+    const clientUsers = updated.clientId ? await prisma.user.findMany({
+      where: { clientId: updated.clientId, role: { in: ['CLIENT', 'CLIENT_MANAGER'] } },
+      select: { id: true, email: true, name: true }
+    }) : []
     function getRecipients() {
       const map = new Map<string, { email: string; name: string }>()
       for (const a of adminUsers) {
@@ -115,6 +118,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         map.set(updated.assignee.email, { email: updated.assignee.email, name: updated.assignee.name ?? '' })
       if (updated.creator?.email && updated.creator.id !== userId)
         map.set(updated.creator.email, { email: updated.creator.email, name: updated.creator.name ?? '' })
+      for (const u of clientUsers) {
+        if (u.email && u.id !== userId) map.set(u.email, { email: u.email, name: u.name ?? '' })
+      }
       return Array.from(map.values())
     }
 

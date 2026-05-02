@@ -90,7 +90,7 @@ const PORTAL_URL = process.env.NEXTAUTH_URL ?? 'https://portal.sycom.sk'
 
 export async function sendTicketCreated(
   toEmail: string,
-  opts: { ticketNumber: number; subject: string; creatorName?: string; priority?: string; category?: string }
+  opts: { ticketNumber: number; subject: string; creatorName?: string; clientName?: string; priority?: string; category?: string }
 ) {
   const priorityColors: Record<string, string> = { CRITICAL:'#dc2626', HIGH:'#ea580c', MEDIUM:'#2563eb', LOW:'#16a34a' }
   const priorityLabels: Record<string, string> = { CRITICAL:'Kritická', HIGH:'Vysoká', MEDIUM:'Stredná', LOW:'Nízka' }
@@ -106,7 +106,7 @@ export async function sendTicketCreated(
       subject: `[Tiket #${opts.ticketNumber}] ${opts.subject}`,
       html: emailLayout(`Nový tiket #${opts.ticketNumber}`, `
         <h2 style="margin:0 0 8px;font-size:20px;color:#111827;">Váš tiket bol vytvorený</h2>
-        <p style="margin:0 0 24px;font-size:14px;color:#6b7280;">Dobrý deň${opts.creatorName ? `, <strong>${opts.creatorName}</strong>` : ''}, váš tiket bol úspešne prijatý.</p>
+        <p style="margin:0 0 24px;font-size:14px;color:#6b7280;">Dobrý deň${opts.creatorName ? `, <strong>${opts.creatorName}</strong>` : ''}${opts.clientName ? `, váš tiket pre spoločnosť <strong>${opts.clientName}</strong> bol úspešne prijatý.` : ', váš tiket bol úspešne prijatý.'}</p>
         <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px;width:100%;">
           ${infoRow('Číslo tiketu:', `#${opts.ticketNumber}`)}
           ${infoRow('Predmet:', opts.subject)}

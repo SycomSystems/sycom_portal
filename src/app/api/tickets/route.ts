@@ -125,11 +125,12 @@ export async function POST(req: NextRequest) {
     const { sendTicketCreated, sendTicketAssigned } = await import('@/lib/email')
     // Email klientovi (potvrdenie)
     if (ticket.creator?.email) {
-      sendTicketCreated(ticket.creator.email, {
+      sendTicketCreated(ticket.creator!.email!, {
         ticketNumber: ticket.ticketNumber,
-        subject:      ticket.subject,
-        priority:     ticket.priority,
-        category:     ticket.category,
+        subject: ticket.subject,
+        priority: ticket.priority,
+        category: ticket.category,
+        clientName: ticket.client?.name,
       }).catch(() => {})
     }
     // Email agentovi (pridelenie)
