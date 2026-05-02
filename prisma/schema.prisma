@@ -241,7 +241,7 @@ model TeamMember {
 
 model Ticket {
   id            String         @id @default(cuid())
-  ticketNumber  Int            @unique @default(autoincrement())
+  ticketNumber  Int            @unique
   subject       String
   description   String         @db.Text
   status        TicketStatus   @default(OPEN)

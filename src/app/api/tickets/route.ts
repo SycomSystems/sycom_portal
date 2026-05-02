@@ -17,6 +17,15 @@ const createSchema = z.object({
   slaDeadline: z.string().optional(),
 })
 
+
+async function generateTicketNumber(): Promise<number> {
+  while (true) {
+    const n = Math.floor(1000000000 + Math.random() * 9000000000)
+    const existing = await prisma.ticket.findUnique({ where: { ticketNumber: n } })
+    if (!existing) return n
+  }
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -104,8 +113,10 @@ export async function POST(req: NextRequest) {
     resolvedAssigneeId = tech?.userId ?? null
   }
   const resolvedSla = slaDeadline ? new Date(slaDeadline) : getSlaDeadline(priority)
+  const ticketNumber = await generateTicketNumber()
   const ticket = await prisma.ticket.create({
     data: {
+      ticketNumber,
       subject,
       description,
       priority,

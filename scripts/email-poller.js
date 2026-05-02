@@ -47,6 +47,38 @@ function slaDeadline(priority) {
   return new Date(Date.now() + (hours[priority] ?? 8) * 60 * 60 * 1000)
 }
 
+
+// ─── Generate unique 10-digit ticket number ───────────────────────────────────
+async function generateTicketNumber() {
+  while (true) {
+    const n = Math.floor(1000000000 + Math.random() * 9000000000)
+    const existing = await prisma.ticket.findUnique({ where: { ticketNumber: n } })
+    if (!existing) return n
+  }
+}
+// ─── Strip quoted reply from email body ───────────────────────────────────────
+function stripQuotedReply(text) {
+  if (!text) return ''
+  const lines = text.split('\n')
+  const cutPatterns = [
+    /^On .{10,200}wrote:\s*$/i,
+    /^-{3,}\s*(original message|forwarded|pôvodná správa)/i,
+    /^od:\s*.+@/i,
+    /^from:\s*.+@/i,
+    /^_{3,}$/,
+  ]
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (cutPatterns.some(p => p.test(trimmed))) {
+      return lines.slice(0, i).join('\n').trim()
+    }
+    if (trimmed.startsWith('>') && i > 0) {
+      return lines.slice(0, i).join('\n').trim()
+    }
+  }
+  return text.trim()
+}
+
 // ─── Load IMAP settings from DB ──────────────────────────────────────────────
 async function loadSettings() {
   const rows = await prisma.setting.findMany({
@@ -233,7 +265,37 @@ async function processMessage(imap, msg) {
   const sender   = getFromAddress(parsed)
   const toAddrs  = toAddresses(parsed)
 
-  // ── 1. Resolve creator ────────────────────────────────────────────────────
+  const rawSubject = (parsed.subject || '').trim()
+
+  // ── 0. Check if reply to existing ticket ─────────────────────────────────
+  const ticketMatch = rawSubject.match(/\[Tiket\s*#(\d+)\]/i)
+  if (ticketMatch) {
+    const ticketNumber = parseInt(ticketMatch[1])
+    const existingTicket = await prisma.ticket.findUnique({ where: { ticketNumber } })
+    if (existingTicket) {
+      let authorId = null
+      if (sender) {
+        const user = await prisma.user.findFirst({ where: { email: sender } })
+        authorId = user?.id ?? null
+      }
+      if (!authorId) authorId = existingTicket.creatorId
+      let body = (parsed.text || '').trim()
+      if (!body && parsed.html) {
+        body = parsed.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      }
+      body = stripQuotedReply(body)
+      if (!body) body = '(prázdna odpoveď)'
+      await prisma.comment.create({
+        data: { body, ticketId: existingTicket.id, authorId, isInternal: false, workedHours: 0 },
+      })
+      console.log(`[poller] Reply to #${ticketNumber} added as comment — from: ${sender}`)
+      await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
+      return
+    }
+    console.log(`[poller] Ticket #${ticketNumber} not found — creating new ticket`)
+  }
+
+    // ── 1. Resolve creator ────────────────────────────────────────────────────
   if (!sender) {
     console.log('[poller] No sender address — skipping')
     await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
@@ -281,8 +343,10 @@ async function processMessage(imap, msg) {
   })
 
   // ── 5. Create ticket ──────────────────────────────────────────────────────
+  const ticketNumber = await generateTicketNumber()
   const ticket = await prisma.ticket.create({
     data: {
+      ticketNumber,
       subject,
       description,
       priority,
@@ -388,8 +452,10 @@ async function processRecurringTickets() {
     console.log(`[recurring] Processing ${due.length} recurring ticket(s)`)
     for (const rt of due) {
       try {
+        const ticketNum = await generateTicketNumber()
         const ticket = await prisma.ticket.create({
           data: {
+            ticketNumber: ticketNum,
             subject: rt.subject,
             description: rt.description ?? '',
             status: 'OPEN',
