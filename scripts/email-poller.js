@@ -50,6 +50,19 @@ function slaDeadline(priority) {
 
 
 const LOG_DIR = '/opt/sycom-portal/logs'
+const PROCESSED_FILE = '/opt/sycom-portal/logs/processed-emails.json'
+
+function loadProcessed() {
+  try { return new Set(JSON.parse(fs.readFileSync(PROCESSED_FILE, 'utf8'))) }
+  catch { return new Set() }
+}
+
+function saveProcessed(set) {
+  const arr = Array.from(set)
+  if (arr.length > 5000) arr.splice(0, arr.length - 5000)
+  fs.writeFileSync(PROCESSED_FILE, JSON.stringify(arr))
+}
+
 function log(level, msg) {
   const ts = new Date().toISOString()
   const entry = JSON.stringify({ ts, level, msg })
@@ -306,11 +319,14 @@ async function processMessage(imap, msg) {
         await prisma.comment.create({
           data: { body, ticketId: existingTicket.id, authorId, isInternal: false, workedHours: 0 },
         })
+        await prisma.ticket.update({
+          where: { id: existingTicket.id },
+          data: { updatedById: authorId },
+        })
         log('info', `[poller] Reply to #${ticketNumber} added as comment — from: ${sender}`)
       } catch (e) {
         log('error', `[poller] Failed to add comment to #${ticketNumber}:`, e.message)
       }
-      await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
       return
     }
     log('info', `[poller] Ticket #${ticketNumber} not found — creating new ticket`)
@@ -319,13 +335,11 @@ async function processMessage(imap, msg) {
     // ── 1. Resolve creator ────────────────────────────────────────────────────
   if (!sender) {
     log('info', '[poller] No sender address — skipping')
-    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
 
   const creatorResult = await resolveCreator(sender)
   if (!creatorResult) {
-    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
   const creator = creatorResult.user
@@ -343,7 +357,6 @@ async function processMessage(imap, msg) {
 
   if (!matchedClient) {
     log('info', `[poller] No client resolved for ${sender} — skipping`)
-    await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
     return
   }
 
@@ -374,6 +387,7 @@ async function processMessage(imap, msg) {
       category:    'EMAIL',
       clientId:    matchedClient.id,
       creatorId:   creator.id,
+      updatedById: creator.id,
       assigneeId:  techAssignment?.userId ?? null,
       slaDeadline: slaDeadline(priority),
     },
@@ -408,7 +422,6 @@ async function processMessage(imap, msg) {
   }
 
   // ── 7. Mark as read ───────────────────────────────────────────────────────
-  await imap.messageFlagsAdd(msg.seq, ['\\Seen'])
 }
 
 // ─── Main poll cycle ──────────────────────────────────────────────────────────
@@ -441,11 +454,27 @@ async function poll() {
       log('info', `[poller] Found ${uids.length} unseen message(s).`)
 
       if (uids.length > 0) {
+        const processed = loadProcessed()
         for await (const msg of imap.fetch(uids, { source: true, envelope: true })) {
+          const rawSource = msg.source
+          let msgId = null
+          try {
+            const { simpleParser } = require('mailparser')
+            const tmp = await simpleParser(rawSource)
+            msgId = tmp.messageId || null
+          } catch {}
+          if (msgId && processed.has(msgId)) {
+            log('info', `[poller] Skipping already-processed message: ${msgId}`)
+            continue
+          }
           try {
             await processMessage(imap, msg)
           } catch (err) {
             log('error', '[poller] Error processing message:', err.message)
+          }
+          if (msgId) {
+            processed.add(msgId)
+            saveProcessed(processed)
           }
         }
       }
@@ -483,6 +512,7 @@ async function processRecurringTickets() {
             priority: rt.priority,
             clientId: rt.clientId,
             creatorId: rt.createdById,
+            updatedById: rt.createdById,
             assigneeId: rt.assignedToId,
           },
         })

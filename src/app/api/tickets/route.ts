@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
       clientId:    resolvedClientId,
       slaDeadline: resolvedSla,
       creatorId:   userId,
+      updatedById: userId,
       assigneeId:  resolvedAssigneeId,
     },
     include: {

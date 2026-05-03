@@ -28,14 +28,18 @@ export default function TicketsPage() {
   const [search,   setSearch]   = useState('')
   const [status,   setStatus]   = useState('Všetky')
   const [priority, setPriority] = useState('Všetky')
+  const [page,     setPage]     = useState(1)
+  const [limit,    setLimit]    = useState(20)
 
   const params = new URLSearchParams()
   if (search)                params.set('search', search)
   if (status !== 'Všetky')   params.set('status', status)
   if (priority !== 'Všetky') params.set('priority', priority)
+  params.set('page', String(page))
+  params.set('limit', String(limit))
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', search, status, priority],
+    queryKey: ['tickets', search, status, priority, page, limit],
     queryFn:  () => fetch(`/api/tickets?${params}`).then(r => r.json()),
     placeholderData: (prev: any) => prev,
   })
@@ -177,6 +181,34 @@ export default function TicketsPage() {
           ))}
         </div>
       </div>
+        {/* Pagination */}
+        {(data?.total ?? 0) > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-3 px-1">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>Riadkov na stránku:</span>
+              {[20, 40, 80, 150].map(l => (
+                <button key={l} onClick={() => { setLimit(l); setPage(1) }}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${limit === l ? 'bg-sycom-500 text-white border-sycom-500' : 'bg-white text-gray-500 border-gray-200 hover:border-sycom-400'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">
+                {Math.min((page - 1) * limit + 1, data?.total ?? 0)}–{Math.min(page * limit, data?.total ?? 0)} z {data?.total ?? 0}
+              </span>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                ‹ Späť
+              </button>
+              <span className="text-xs font-semibold text-gray-700 px-1">{page} / {Math.ceil((data?.total ?? 1) / limit)}</span>
+              <button onClick={() => setPage(p => p + 1)} disabled={page * limit >= (data?.total ?? 0)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                Ďalší ›
+              </button>
+            </div>
+          </div>
+        )}
     </PortalLayout>
   )
 }
