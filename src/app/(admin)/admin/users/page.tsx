@@ -55,6 +55,7 @@ export default function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [sendWelcome, setSendWelcome] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -79,12 +80,14 @@ export default function UsersPage() {
   const openCreate = () => {
     setForm(emptyForm)
     setEditing(null)
+    setSendWelcome(false)
     setModal('create')
   }
 
   const openEdit = (u: User) => {
     setForm({ name: u.name, email: u.email, password: '', role: u.role, department: u.department || '', phone: u.phone || '', clientId: u.clientId || '', notifyAll: (u as any).notifyAll ?? true })
     setEditing(u)
+    setSendWelcome(false)
     setModal('edit')
   }
 
@@ -96,10 +99,20 @@ export default function UsersPage() {
       const body: any = { name: form.name, email: form.email, role: form.role, department: form.department || null, phone: form.phone || null, clientId: form.clientId || null, notifyAll: form.notifyAll }
       if (!editing || form.password) body.password = form.password
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Chyba') }
+      const savedData = await res.json()
+      if (!res.ok) { throw new Error(savedData.error || 'Chyba') }
+      if (sendWelcome && form.password) {
+        const targetId = editing ? editing.id : savedData.id
+        await fetch(`/api/users/${targetId}/send-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: form.password }),
+        })
+      }
       setModal(null)
+      setSendWelcome(false)
       load()
-      showFlash(editing ? 'Používateľ bol aktualizovaný.' : 'Používateľ bol vytvorený.')
+      showFlash(editing ? 'Používateľ bol aktualizovaný.' : (sendWelcome ? 'Používateľ bol vytvorený a uvítací email bol odoslaný.' : 'Používateľ bol vytvorený.'))
     } catch (e: any) {
       alert(e.message)
     } finally {
@@ -245,7 +258,22 @@ export default function UsersPage() {
                       Generovať
                     </button>
                   </div>
-                  {form.password && <p className="mt-1 text-xs text-sycom-600 font-mono bg-sycom-50 px-2 py-1 rounded-lg">Heslo: <span className="font-bold select-all">{form.password}</span></p>}
+                  {form.password && (
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-sycom-600 font-mono bg-sycom-50 px-2 py-1 rounded-lg">Heslo: <span className="font-bold select-all">{form.password}</span></p>
+                      <button
+                        type="button"
+                        onClick={() => setSendWelcome(v => !v)}
+                        className={`px-3 py-1 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap ${
+                          sendWelcome
+                            ? 'bg-green-500 text-white border-green-500'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {sendWelcome ? '✓ Odošle uvítací email' : 'Odoslať prihlásenie'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Rola</label>

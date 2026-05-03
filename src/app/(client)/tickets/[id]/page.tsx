@@ -215,6 +215,12 @@ export default function TicketDetailPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!confirm("Naozaj chcete vymazat tento tiket? Tato akcia je nezvratna.")) return
+    await fetch("/api/tickets/" + id, { method: "DELETE" })
+    router.push("/tickets")
+  }
+
   const handleDeleteUsage = async (usageId: string) => {
     if (!confirm('Odstrániť túto položku a vrátiť ju na sklad?')) return
     const res = await fetch(`/api/tickets/${id}/stock-usage/${usageId}`, { method: 'DELETE' })
@@ -483,6 +489,34 @@ export default function TicketDetailPage() {
                   </button>
                 )}
               </div>
+              {isAdmin && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                  <p className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2">Nebezpecna zona</p>
+                  <button onClick={handleDelete} className="w-full px-3 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors">
+                    Vymazat tiket
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {!isStaff && (
+            <div className="mt-4 space-y-3">
+              {!isResolved && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Uzatvorit tiket</p>
+                  <button onClick={() => mutation.mutate({ status: 'CLOSED' })} disabled={mutation.isPending} className="w-full px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
+                    Oznacit ako uzavrety
+                  </button>
+                </div>
+              )}
+              {isResolved && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Znova otvorit</p>
+                  <button onClick={() => mutation.mutate({ status: 'OPEN' })} disabled={mutation.isPending} className="w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
+                    Znova otvorit tiket
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

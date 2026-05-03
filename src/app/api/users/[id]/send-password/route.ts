@@ -26,15 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     data: { password: hashed },
   })
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
+  const smtpCfg = await prisma.smtpSettings.findUnique({ where: { id: 1 } })
+  const cfg = smtpCfg
+    ? { host: smtpCfg.host, port: smtpCfg.port, secure: smtpCfg.secure, auth: { user: smtpCfg.user, pass: smtpCfg.pass } }
+    : { host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT) || 587, secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } }
+  const transporter = nodemailer.createTransport(cfg)
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
