@@ -30,6 +30,12 @@ export default function TicketsPage() {
   const [priority, setPriority] = useState('Všetky')
   const [page,     setPage]     = useState(1)
   const [limit,    setLimit]    = useState(20)
+  const { data: session } = useSession()
+  const isAdmin = ['ADMIN', 'AGENT'].includes((session?.user as any)?.role)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatus,  setBulkStatus]  = useState('')
+  const [bulkAssignee, setBulkAssignee] = useState('')
+  const [bulkLoading,  setBulkLoading]  = useState(false)
 
   const params = new URLSearchParams()
   if (search)                params.set('search', search)
@@ -45,6 +51,31 @@ export default function TicketsPage() {
   })
 
   const tickets = data?.tickets ?? []
+  const { data: agentList } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => fetch('/api/users').then(r => r.json()),
+    enabled: isAdmin,
+  })
+  const agents = (agentList ?? []).filter((u: any) => u.role === 'ADMIN' || u.role === 'AGENT')
+
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
+  })
+  const selectAll = () => setSelectedIds(new Set(tickets.map((t: any) => t.id)))
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const bulkAction = async (action: string, extra?: any) => {
+    setBulkLoading(true)
+    await fetch('/api/tickets/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ids: Array.from(selectedIds), ...extra }),
+    })
+    clearSelection()
+    setBulkLoading(false)
+    // trigger refetch
+    setPage(p => p)
+  }
 
   return (
     <PortalLayout>
@@ -93,11 +124,43 @@ export default function TicketsPage() {
           </div>
         </div>
 
+        {/* Bulk action bar */}
+        {isAdmin && selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-sycom-50 border border-sycom-200 rounded-2xl px-4 py-2.5 mb-3">
+            <span className="text-xs font-bold text-sycom-700">{selectedIds.size} vybraných</span>
+            <button onClick={clearSelection} className="text-xs text-gray-500 hover:text-gray-700 underline">Zrušiť výber</button>
+            <div className="flex-1" />
+            <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+              <option value="">Zmeniť stav...</option>
+              {['OPEN','IN_PROGRESS','WAITING','RESOLVED','CLOSED'].map(s => (
+                <option key={s} value={s}>{statusLabels[s] ?? s}</option>
+              ))}
+            </select>
+            {bulkStatus && <button onClick={() => bulkAction('status', { status: bulkStatus })} disabled={bulkLoading} className="text-xs px-3 py-1.5 bg-sycom-500 text-white rounded-lg hover:bg-sycom-600 disabled:opacity-50">Použiť</button>}
+            <select value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+              <option value="">Priradiť technika...</option>
+              {agents.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            {bulkAssignee && <button onClick={() => bulkAction('assign', { assigneeId: bulkAssignee })} disabled={bulkLoading} className="text-xs px-3 py-1.5 bg-sycom-500 text-white rounded-lg hover:bg-sycom-600 disabled:opacity-50">Priradiť</button>}
+            {(session?.user as any)?.role === 'ADMIN' && (
+              <button onClick={() => { if(confirm(`Vymazať ${selectedIds.size} tikety?`)) bulkAction('delete') }} disabled={bulkLoading} className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50">
+                Vymazať
+              </button>
+            )}
+          </div>
+        )}
         {/* Desktop table */}
         <div className="hidden md:block bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
+                {isAdmin && (
+                  <th className="px-4 py-3 w-10">
+                    <input type="checkbox" onChange={e => e.target.checked ? selectAll() : clearSelection()}
+                      checked={tickets.length > 0 && selectedIds.size === tickets.length}
+                      className="rounded border-gray-300 text-sycom-500 cursor-pointer" />
+                  </th>
+                )}
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">ID</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Predmet</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
@@ -115,6 +178,12 @@ export default function TicketsPage() {
                 <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
               ) : tickets.map((t: any) => (
                 <tr key={t.id} className="hover:bg-sycom-50 transition-colors">
+                  {isAdmin && (
+                    <td className="px-4 py-3.5">
+                      <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
+                        className="rounded border-gray-300 text-sycom-500 cursor-pointer" />
+                    </td>
+                  )}
                   <td className="px-5 py-3.5">
                     <span className="font-mono text-xs text-sycom-500 font-semibold">#T-{t.ticketNumber}</span>
                   </td>
