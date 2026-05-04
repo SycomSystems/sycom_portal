@@ -1,20 +1,22 @@
 import { prisma } from './prisma'
 
 export async function logAudit(
-  userId: string,
+  userId: string | null,
   entityType: string,
   entityId: string,
   action: string,
   oldValue?: any,
-  newValue?: any
+  newValue?: any,
+  ip?: string
 ) {
   try {
     await prisma.auditLog.create({
       data: {
-        userId,
+        userId: userId ?? undefined,
         entityType,
         entityId,
         action,
+        ip: ip ?? null,
         oldValue: oldValue != null ? JSON.stringify(oldValue) : null,
         newValue: newValue != null ? JSON.stringify(newValue) : null,
       },
