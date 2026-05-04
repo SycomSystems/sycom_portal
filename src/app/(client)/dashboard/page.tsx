@@ -55,10 +55,10 @@ export default function DashboardPage() {
   })
 
   const stats = [
-    { label: 'Otvorené tikety',      value: data?.summary?.totalOpen       ?? '—', icon: <Ticket size={20} />,       color: '#3b82f6', sub: 'celkom aktívnych' },
-    { label: 'Vyriešené dnes',       value: data?.summary?.resolvedToday   ?? '—', icon: <CheckCircle size={20} />,   color: '#10b981', sub: 'dnes uzatvorených' },
-    { label: 'Priemerný čas',        value: data?.summary?.avgResolutionHours ?? '—', icon: <Clock size={20} />,       color: '#8b5cf6', sub: 'hodín na vyriešenie' },
-    { label: 'Kritické tikety',      value: data?.summary?.criticalOpen    ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'vyžaduje pozornosť' },
+    { label: 'Otvorene tikety',   value: statsData?.open   ?? '—', icon: <Ticket size={20} />,        color: '#3b82f6', sub: 'aktivne' },
+    { label: 'Vysoka priorita',   value: statsData?.high   ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'tikety' },
+    { label: 'Stredna priorita',  value: statsData?.medium ?? '—', icon: <Activity size={20} />,      color: '#8b5cf6', sub: 'tikety' },
+    { label: 'Nizka priorita',    value: statsData?.low    ?? '—', icon: <CheckCircle size={20} />,   color: '#22c55e', sub: 'tikety' },
   ]
 
   const PRIORITY_COLORS: Record<string, string> = {
