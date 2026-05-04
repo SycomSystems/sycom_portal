@@ -53,6 +53,11 @@ export default function DashboardPage() {
     queryKey: ['tickets-recent'],
     queryFn:  () => fetch('/api/tickets?limit=5').then(r => r.json()),
   })
+  const { data: statsData } = useQuery({
+    queryKey: ['ticket-stats'],
+    queryFn:  () => fetch('/api/tickets/stats').then(r => r.json()),
+    refetchInterval: 30_000,
+  })
 
   const stats = [
     { label: 'Otvorene tikety',   value: statsData?.open   ?? '—', icon: <Ticket size={20} />,        color: '#3b82f6', sub: 'aktivne' },
