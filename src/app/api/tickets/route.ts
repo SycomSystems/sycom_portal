@@ -10,7 +10,7 @@ import { getSlaDeadline } from '@/lib/utils'
 const createSchema = z.object({
   subject:     z.string().min(5).max(200),
   description: z.string().min(10),
-  priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  priority:    z.enum(['LOW', 'MEDIUM', 'HIGH']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
   clientId:    z.string().optional(),
   assigneeId:  z.string().optional(),

@@ -53,17 +53,22 @@ export default function DashboardPage() {
     queryKey: ['tickets-recent'],
     queryFn:  () => fetch('/api/tickets?limit=5').then(r => r.json()),
   })
+  const { data: statsData } = useQuery({
+    queryKey: ['ticket-stats'],
+    queryFn:  () => fetch('/api/tickets/stats').then(r => r.json()),
+    refetchInterval: 30_000,
+  })
 
   const stats = [
-    { label: 'Otvorené tikety',      value: data?.summary?.totalOpen       ?? '—', icon: <Ticket size={20} />,       color: '#3b82f6', sub: 'celkom aktívnych' },
-    { label: 'Vyriešené dnes',       value: data?.summary?.resolvedToday   ?? '—', icon: <CheckCircle size={20} />,   color: '#10b981', sub: 'dnes uzatvorených' },
-    { label: 'Priemerný čas',        value: data?.summary?.avgResolutionHours ?? '—', icon: <Clock size={20} />,       color: '#8b5cf6', sub: 'hodín na vyriešenie' },
-    { label: 'Kritické tikety',      value: data?.summary?.criticalOpen    ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'vyžaduje pozornosť' },
+    { label: 'Otvorené tikety',   value: statsData?.open   ?? '—', icon: <Ticket size={20} />,        color: '#3b82f6', sub: 'aktívne' },
+    { label: 'Vysoká priorita',   value: statsData?.high   ?? '—', icon: <AlertTriangle size={20} />, color: '#ef4444', sub: 'tikety' },
+    { label: 'Stredná priorita',  value: statsData?.medium ?? '—', icon: <Activity size={20} />,      color: '#8b5cf6', sub: 'tikety' },
+    { label: 'Nízka priorita',    value: statsData?.low    ?? '—', icon: <CheckCircle size={20} />,   color: '#22c55e', sub: 'tikety' },
   ]
 
   const PRIORITY_COLORS: Record<string, string> = {
     LOW:      '#22c55e', MEDIUM: '#f59e0b',
-    HIGH:     '#f97316', CRITICAL: '#ef4444',
+    HIGH:     '#f97316',
   }
 
   return (

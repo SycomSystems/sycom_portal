@@ -10,7 +10,7 @@ import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, Ch
 import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
-const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH']
 const CATEGORY_OPTIONS = ['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']
 
 type HoursType = 'STANDARD' | 'STANDARD_MIMO' | 'SERVER' | 'SERVER_MIMO'
@@ -22,7 +22,6 @@ const HOURS_TYPE_OPTIONS: { value: HoursType; label: string; color: string }[] =
 ]
 
 const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'bg-red-100 text-red-700 border-red-200',
   HIGH: 'bg-orange-100 text-orange-700 border-orange-200',
   MEDIUM: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   LOW: 'bg-gray-100 text-gray-500 border-gray-200',

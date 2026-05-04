@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
     totalOpen,
     totalInProgress,
     resolvedToday,
-    criticalOpen,
     totalThisMonth,
     byStatus,
     byPriority,
@@ -37,7 +36,6 @@ export async function GET(req: NextRequest) {
     prisma.ticket.count({ where: { status: 'OPEN', ...agentCF } }),
     prisma.ticket.count({ where: { status: 'IN_PROGRESS', ...agentCF } }),
     prisma.ticket.count({ where: { status: 'RESOLVED', resolvedAt: { gte: todayStart }, ...agentCF } }),
-    prisma.ticket.count({ where: { status: 'OPEN', priority: 'CRITICAL', ...agentCF } }),
     prisma.ticket.count({ where: { createdAt: { gte: monthStart }, ...agentCF } }),
 
     prisma.ticket.groupBy({ by: ['status'],   _count: true }),
@@ -115,7 +113,6 @@ export async function GET(req: NextRequest) {
       totalOpen,
       totalInProgress,
       resolvedToday,
-      criticalOpen,
       totalThisMonth,
       avgResolutionHours: Math.round(avgResolutionHours * 10) / 10,
       slaBreached,

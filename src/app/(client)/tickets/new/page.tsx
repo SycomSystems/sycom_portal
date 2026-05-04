@@ -13,9 +13,9 @@ import { Loader2, Send, Building2 } from 'lucide-react'
 const schema = z.object({
   subject:     z.string().min(5, 'Min. 5 znakov').max(200),
   description: z.string().min(10, 'Min. 10 znakov'),
-  priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   category:    z.enum(['HARDWARE', 'SOFTWARE', 'NETWORK', 'EMAIL', 'SECURITY', 'CLOUD', 'ONBOARDING', 'OTHER']),
   clientId:    z.string().optional(),
+  priority:    z.enum(['LOW', 'MEDIUM', 'HIGH']),
   assigneeId:  z.string().optional(),
 })
 
@@ -25,7 +25,6 @@ const PRIORITIES = [
   { value: 'LOW',      label: '🟢 Nízka',    desc: 'Všeobecná otázka, nie je urgentné' },
   { value: 'MEDIUM',   label: '🟡 Stredná',   desc: 'Práca obmedzená, ale funkčná' },
   { value: 'HIGH',     label: '🟠 Vysoká',    desc: 'Práca je zablokovaná' },
-  { value: 'CRITICAL', label: '🔴 Kritická',  desc: 'Systém nefunguje, kritický dopad' },
 ]
 
 const CATEGORIES = [
@@ -97,7 +96,6 @@ export default function NewTicketPage() {
   // Update SLA date when priority changes
   useEffect(() => {
     const d = new Date()
-    if (selectedPriority === 'CRITICAL') { setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); return }
     if (selectedPriority === 'HIGH') { d.setDate(d.getDate() + 1); setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); return }
     const days = selectedPriority === 'LOW' ? 5 : 2
     let added = 0

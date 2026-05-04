@@ -10,7 +10,7 @@ const updateSchema = z.object({
   status: z.enum(['OPEN','IN_PROGRESS','WAITING','RESOLVED','CLOSED']).optional(),
   subject: z.string().min(5).max(200).optional(),
   description: z.string().min(10).optional(),
-  priority: z.enum(['LOW','MEDIUM','HIGH','CRITICAL']).optional(),
+  priority: z.enum(['LOW','MEDIUM','HIGH']).optional(),
   category: z.enum(['HARDWARE','SOFTWARE','NETWORK','EMAIL','SECURITY','CLOUD','ONBOARDING','OTHER']).optional(),
   assigneeId: z.string().optional().nullable(),
   teamId: z.string().optional().nullable(),

@@ -34,7 +34,6 @@ export function addWorkingDays(date: Date, days: number): Date {
 // SLA deadline based on priority
 export function getSlaDeadline(priority: string): Date {
   const now = new Date()
-  if (priority === 'CRITICAL') { const d = new Date(now); d.setHours(d.getHours() + 1); return d }
   if (priority === 'HIGH')     { const d = new Date(now); d.setHours(d.getHours() + 4); return d }
   if (priority === 'LOW')      return addWorkingDays(now, 5)
   return addWorkingDays(now, 2) // MEDIUM default
@@ -55,7 +54,6 @@ export function isSlaWarning(deadline: Date | null): boolean {
 
 // Labels for display
 export const priorityLabels: Record<string, string> = {
-  LOW: 'Nízka', MEDIUM: 'Stredná', HIGH: 'Vysoká', CRITICAL: 'Kritická',
 }
 
 export const statusLabels: Record<string, string> = {

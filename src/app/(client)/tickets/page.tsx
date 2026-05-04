@@ -8,10 +8,9 @@ import { Search, Plus, Filter, Building2, ChevronRight } from 'lucide-react'
 import { formatDateTime, priorityLabels, statusLabels } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
+const PRIORITY_FILTERS = ['Všetky', 'HIGH', 'MEDIUM', 'LOW']
 const STATUS_FILTERS   = ['Všetky', 'OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED']
-const PRIORITY_FILTERS = ['Všetky', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'bg-red-100 text-red-700',
   HIGH:     'bg-orange-100 text-orange-700',
   MEDIUM:   'bg-yellow-100 text-yellow-700',
   LOW:      'bg-gray-100 text-gray-500',

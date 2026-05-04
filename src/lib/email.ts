@@ -92,8 +92,8 @@ export async function sendTicketCreated(
   toEmail: string,
   opts: { ticketNumber: number; subject: string; creatorName?: string; clientName?: string; priority?: string; category?: string }
 ) {
-  const priorityColors: Record<string, string> = { CRITICAL:'#dc2626', HIGH:'#ea580c', MEDIUM:'#2563eb', LOW:'#16a34a' }
-  const priorityLabels: Record<string, string> = { CRITICAL:'Kritická', HIGH:'Vysoká', MEDIUM:'Stredná', LOW:'Nízka' }
+  const priorityColors: Record<string, string> = { HIGH:'#ea580c', MEDIUM:'#2563eb', LOW:'#16a34a' }
+  const priorityLabels: Record<string, string> = { HIGH:'Vysoká', MEDIUM:'Stredná', LOW:'Nízka' }
   const categoryLabels: Record<string, string> = {
     HARDWARE:'Hardware', SOFTWARE:'Software', NETWORK:'Sieť', EMAIL:'Email',
     SECURITY:'Bezpečnosť', CLOUD:'Cloud', ONBOARDING:'Onboarding', OTHER:'Iné'
