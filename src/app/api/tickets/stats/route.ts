@@ -23,11 +23,13 @@ export async function GET() {
     where.assigneeId = userId
   }
 
+  const active = { status: { notIn: ['RESOLVED', 'CLOSED'] as const } }
+
   const [open, high, medium, low] = await Promise.all([
     prisma.ticket.count({ where: { ...where, status: { in: ['OPEN', 'IN_PROGRESS', 'WAITING'] } } }),
-    prisma.ticket.count({ where: { ...where, priority: 'HIGH' } }),
-    prisma.ticket.count({ where: { ...where, priority: 'MEDIUM' } }),
-    prisma.ticket.count({ where: { ...where, priority: 'LOW' } }),
+    prisma.ticket.count({ where: { ...where, ...active, priority: 'HIGH' } }),
+    prisma.ticket.count({ where: { ...where, ...active, priority: 'MEDIUM' } }),
+    prisma.ticket.count({ where: { ...where, ...active, priority: 'LOW' } }),
   ])
 
   return NextResponse.json({ open, high, medium, low })
