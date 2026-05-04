@@ -26,7 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TicketsPage() {
   const [search,   setSearch]   = useState('')
-  const [status,   setStatus]   = useState('Všetky')
+  const [statuses, setStatuses] = useState<Set<string>>(new Set(['OPEN', 'IN_PROGRESS', 'WAITING']))
   const [priority, setPriority] = useState('Všetky')
   const [page,     setPage]     = useState(1)
   const [limit,    setLimit]    = useState(20)
@@ -39,13 +39,13 @@ export default function TicketsPage() {
 
   const params = new URLSearchParams()
   if (search)                params.set('search', search)
-  if (status !== 'Všetky')   params.set('status', status)
+  if (statuses.size > 0) params.set('status', Array.from(statuses).join(','))
   if (priority !== 'Všetky') params.set('priority', priority)
   params.set('page', String(page))
   params.set('limit', String(limit))
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', search, status, priority, page, limit],
+    queryKey: ['tickets', search, Array.from(statuses).sort().join(','), priority, page, limit],
     queryFn:  () => fetch(`/api/tickets?${params}`).then(r => r.json()),
     placeholderData: (prev: any) => prev,
   })
@@ -104,13 +104,26 @@ export default function TicketsPage() {
           </div>
           <div className="flex gap-1.5 flex-wrap items-center">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Stav:</span>
-            {STATUS_FILTERS.map(s => (
-              <button key={s} onClick={() => setStatus(s)}
+            {['OPEN','IN_PROGRESS','WAITING','RESOLVED','CLOSED'].map(s => (
+              <button key={s} onClick={() => {
+                setStatuses(prev => {
+                  const next = new Set(prev)
+                  next.has(s) ? next.delete(s) : next.add(s)
+                  return next
+                })
+                setPage(1)
+              }}
                 className={cn('text-xs font-semibold px-2.5 py-1 rounded-full border transition-all',
-                  status === s ? 'bg-sycom-500 text-white border-sycom-500' : 'bg-white text-gray-500 border-gray-200 hover:border-sycom-400')}>
+                  statuses.has(s) ? 'bg-sycom-500 text-white border-sycom-500' : 'bg-white text-gray-500 border-gray-200 hover:border-sycom-400')}>
                 {statusLabels[s] ?? s}
               </button>
             ))}
+            {statuses.size > 0 && (
+              <button onClick={() => { setStatuses(new Set()); setPage(1) }}
+                className="text-xs text-gray-400 hover:text-gray-600 underline ml-1">
+                Zrušiť
+              </button>
+            )}
           </div>
           <div className="flex gap-1.5 flex-wrap items-center">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Priorita:</span>

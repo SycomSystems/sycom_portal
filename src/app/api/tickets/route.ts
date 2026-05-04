@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (status)   where.status   = status.toUpperCase()
+  if (status)   where.status   = status.includes(',') ? { in: status.split(',').map((s: string) => s.toUpperCase()) } : status.toUpperCase()
   if (priority) where.priority = priority.toUpperCase()
   if (search)   where.OR = [
     { subject:     { contains: search } },
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
         updatedBy: { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
       },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ updatedAt: 'desc' }],
       skip:  (page - 1) * limit,
       take:  limit,
     }),

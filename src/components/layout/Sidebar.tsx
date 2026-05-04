@@ -36,10 +36,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const { data: session } = useSession()
   const role = (session?.user as any)?.role ?? 'CLIENT'
   const [helpdeskPhone, setHelpdeskPhone] = useState('0948 938 217')
+  const [techName, setTechName] = useState<string | null>(null)
   const [ticketBadge, setTicketBadge] = useState(0)
 
   useEffect(() => {
-    fetch('/api/settings/phone').then(r => r.json()).then(d => setHelpdeskPhone(d.phone || '0948 938 217')).catch(() => {})
+    fetch('/api/settings/phone').then(r => r.json()).then(d => { setHelpdeskPhone(d.phone || '0948 938 217'); setTechName(d.techName ?? null) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         <div className="flex items-center gap-2 px-3 py-2.5 bg-sycom-50 rounded-xl">
           <Phone size={14} className="text-sycom-500 shrink-0" />
           <div>
-            <p className="text-[10px] font-bold text-sycom-600 uppercase tracking-wider">Helpdesk</p>
+            <p className="text-[10px] font-bold text-sycom-600 uppercase tracking-wider">{techName ? techName : 'Helpdesk'}</p>
             <p className="text-xs font-semibold text-gray-700">{helpdeskPhone}</p>
           </div>
         </div>
