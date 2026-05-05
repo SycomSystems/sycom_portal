@@ -26,6 +26,10 @@ const ACTION_LABELS: Record<string, string> = {
   client_changed:        'Zmena klienta',
   comment_added:         'Komentar pridany',
   internal_comment_added:'Interni komentar',
+  login_success:         'Prihlasenie uspesne',
+  login_failed:          'Prihlasenie neuspesne',
+  login_failed_unknown:  'Prihlasenie - neznamy user',
+  login_failed_inactive: 'Prihlasenie - neaktivny',
 }
 
 export default function DebugPage() {
@@ -46,6 +50,7 @@ export default function DebugPage() {
   const [auditLogs, setAuditLogs]     = useState<AuditEntry[]>([])
   const [auditTotal, setAuditTotal]   = useState(0)
   const [auditLoading, setAuditLoad] = useState(false)
+  const [auditUser, setAuditUser]     = useState('')
   const [auditFrom, setAuditFrom]     = useState('')
   const [auditTo, setAuditTo]         = useState('')
   const [auditAction, setAuditAction] = useState('')
@@ -96,9 +101,9 @@ export default function DebugPage() {
   const filtered = search
     ? entries.filter(e => e.msg.toLowerCase().includes(search.toLowerCase()))
     : entries
-  const filteredAudit = auditAction
-    ? auditLogs.filter(l => l.action === auditAction)
-    : auditLogs
+  const filteredAudit = auditLogs
+    .filter(l => !auditAction || l.action === auditAction)
+    .filter(l => !auditUser || l.user?.name?.toLowerCase().includes(auditUser.toLowerCase()) || l.user?.email?.toLowerCase().includes(auditUser.toLowerCase()))
 
   return (
     <PortalLayout>
@@ -200,6 +205,7 @@ export default function DebugPage() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
+              <input type="text" placeholder="Filter: pouzivatel..." value={auditUser} onChange={e => setAuditUser(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-sycom-400 w-44" />
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">Od:</span>
                 <input type="date" value={auditFrom} onChange={e => setAuditFrom(e.target.value)}
