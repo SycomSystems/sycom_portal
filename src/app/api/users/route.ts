@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, name: true, email: true, role: true,
       department: true, phone: true, isActive: true,
+      notifyAll: true,
       createdAt: true, clientId: true,
       client: { select: { id: true, name: true } },
     },
