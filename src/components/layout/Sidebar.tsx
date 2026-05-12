@@ -99,6 +99,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             <p className="text-xs font-semibold text-gray-700">{helpdeskPhone}</p>
           </div>
         </div>
+        <p className="text-center text-[10px] text-gray-300 mt-2 select-none">v{process.env.NEXT_PUBLIC_APP_VERSION}</p>
       </div>
     </aside>
   )
