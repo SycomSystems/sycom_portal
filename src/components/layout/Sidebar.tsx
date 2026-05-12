@@ -60,9 +60,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   return (
     <aside className={cn(
       'w-60 flex flex-col bg-white border-r border-gray-100',
-      'fixed top-[62px] bottom-0 z-40 transition-all duration-200',
-      'md:left-0',
-    isOpen ? 'left-0' : '-left-60'
+      'fixed top-[62px] bottom-0 left-0 z-40 transition-transform duration-200',
+    isOpen ? 'translate-x-0' : 'md:translate-x-0 -translate-x-full'
     )}>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {visibleItems.map(item => {

@@ -45,7 +45,8 @@ export async function GET(req: NextRequest) {
     where.creatorId = userId
   } else if (role === 'AGENT') {
     const assigned = await prisma.clientTechnician.findMany({ where: { userId }, select: { clientId: true } })
-    where.clientId = { in: assigned.map(a => a.clientId) }
+    const clientIds = assigned.map(a => a.clientId)
+    where.AND = [{ OR: [...(clientIds.length > 0 ? [{ clientId: { in: clientIds } }] : []), { assigneeId: userId }] }]
   } else if (role === 'CLIENT_MANAGER') {
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (me?.clientId) {
@@ -57,10 +58,10 @@ export async function GET(req: NextRequest) {
 
   if (status)   where.status   = status.includes(',') ? { in: status.split(',').map((s: string) => s.toUpperCase()) } : status.toUpperCase()
   if (priority) where.priority = priority.toUpperCase()
-  if (search)   where.OR = [
-    { subject:     { contains: search } },
-    { description: { contains: search } },
-  ]
+  if (search) {
+    const searchOr = { OR: [{ subject: { contains: search } }, { description: { contains: search } }] }
+    if (where.AND) { where.AND.push(searchOr) } else { where.AND = [searchOr] }
+  }
 
   const [tickets, total] = await Promise.all([
     prisma.ticket.findMany({

@@ -84,14 +84,19 @@ export default function NewTicketPage() {
     setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
   }, [])
 
-  // Auto-populate technicians when client changes
+  // Fetch technicians (agents + admins) once on mount for staff
   useEffect(() => {
-    if (!isStaff || !selectedClientId) { setTechnicians([]); setValue('assigneeId', ''); return }
-    const client = (clients as any[]).find(c => c.id === selectedClientId)
-    const techs = (client?.technicians ?? []).map((t: any) => ({ id: t.userId, name: t.user?.name ?? t.userId }))
-    setTechnicians(techs)
-    setValue('assigneeId', techs.length > 0 ? techs[0].id : '')
-  }, [selectedClientId, clients, isStaff, setValue])
+    if (!isStaff) { setTechnicians([]); setValue('assigneeId', ''); return }
+    fetch('/api/users')
+      .then(r => r.json())
+      .then((users: any[]) => {
+        const techs = users
+          .filter((u: any) => u['role'] === 'AGENT' || u['role'] === 'ADMIN')
+          .map((u: any) => ({ id: u['id'], name: u['name'] }))
+        setTechnicians(techs)
+      })
+      .catch(() => {})
+  }, [isStaff, setValue])
 
   // Update SLA date when priority changes
   useEffect(() => {

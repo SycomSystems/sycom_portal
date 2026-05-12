@@ -127,7 +127,7 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
           </button>
 
           {bellOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+            <div className="fixed left-2 right-2 top-[66px] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-xs font-bold text-gray-800">Notifikacie</p>
                 <div className="flex items-center gap-2">

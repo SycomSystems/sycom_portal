@@ -68,7 +68,10 @@ export default function TicketDetailPage() {
   })
   const { data: agentList } = useQuery({
     queryKey: ['agents'],
-    queryFn: () => fetch('/api/users').then(r => r.json()).then((u: any[]) => u.filter(x => x.role === 'AGENT' || x.role === 'ADMIN')),
+    queryFn: () => Promise.all([
+      fetch('/api/users?role=AGENT').then(r => r.json()),
+      fetch('/api/users?role=ADMIN').then(r => r.json()),
+    ]).then(([ag, adm]: [any[], any[]]) => [...ag, ...adm].filter((u: any) => u['role'] === 'AGENT' || u['role'] === 'ADMIN')),
     enabled: role === 'ADMIN' || role === 'AGENT',
   })
   const { data: clients } = useQuery({

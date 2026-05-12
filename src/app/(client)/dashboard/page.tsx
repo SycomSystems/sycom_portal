@@ -73,7 +73,7 @@ export default function DashboardPage() {
 
   return (
     <PortalLayout>
-      <div className="w-full py-0 px-5">
+      <div className="w-full py-0 px-5 overflow-x-hidden">
 
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
                 <TrendingUp size={15} className="text-sycom-500" />
                 <span className="card-title">Tikety za posledných 7 dní</span>
               </div>
-              <div className="p-3">
+              <div className="p-3 overflow-hidden">
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={data?.ticketsPerDay ?? []} barSize={28}>
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7089a4' }} axisLine={false} tickLine={false} />

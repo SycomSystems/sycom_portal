@@ -33,7 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 export default function DebugPage() {
-  const [tab, setTab] = useState<'poller' | 'audit'>('poller')
+  const [tab, setTab] = useState<'poller' | 'audit' | 'smtp'>('poller')
 
   // ── Poller logs ──
   const [entries, setEntries]   = useState<LogEntry[]>([])
@@ -54,6 +54,12 @@ export default function DebugPage() {
   const [auditFrom, setAuditFrom]     = useState('')
   const [auditTo, setAuditTo]         = useState('')
   const [auditAction, setAuditAction] = useState('')
+  // ── SMTP logs ──
+  const [smtpEntries, setSmtpEntries] = useState<any[]>([])
+  const [smtpTotal, setSmtpTotal]     = useState(0)
+  const [smtpLoading, setSmtpLoad]    = useState(false)
+  const [smtpDays, setSmtpDays]       = useState(7)
+
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -83,6 +89,18 @@ export default function DebugPage() {
 
   useEffect(() => { load() }, [load])
   useEffect(() => { if (tab === 'audit') loadAudit() }, [tab, loadAudit])
+  const loadSmtp = async () => {
+    setSmtpLoad(true)
+    try {
+      const r = await fetch('/api/admin/smtp-logs?days=' + smtpDays)
+      const d = await r.json()
+      setSmtpEntries(d.entries || [])
+      setSmtpTotal(d.total || 0)
+    } catch {}
+    finally { setSmtpLoad(false) }
+  }
+  useEffect(() => { if (tab === 'smtp') loadSmtp() }, [tab, smtpDays])
+
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current)
     if (autoRefresh) timerRef.current = setInterval(load, 30000)
@@ -134,6 +152,13 @@ export default function DebugPage() {
               Obnovit
             </button>
           )}
+          {tab === 'smtp' && (
+            <button onClick={loadSmtp} disabled={smtpLoading}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              <RefreshCw size={12} className={smtpLoading ? 'animate-spin' : ''} />
+              Obnovit
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -146,6 +171,10 @@ export default function DebugPage() {
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${tab === 'audit' ? 'border-sycom-500 text-sycom-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             <ScrollText size={14} />
             Audit log {auditTotal > 0 && <span className="text-xs text-gray-400">({auditTotal})</span>}
+          </button>
+          <button onClick={() => setTab('smtp')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${tab === 'smtp' ? 'border-sycom-500 text-sycom-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Odoslane emaily {smtpTotal > 0 && <span className="text-xs text-gray-400">({smtpTotal})</span>}
           </button>
         </div>
 
@@ -252,6 +281,53 @@ export default function DebugPage() {
                             </Link>
                           )}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+        {/* ── SMTP TAB ── */}
+        {tab === 'smtp' && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <select value={smtpDays} onChange={e => setSmtpDays(Number(e.target.value))}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-sycom-400">
+                <option value={1}>Dnes</option>
+                <option value={7}>7 dni</option>
+                <option value={30}>30 dni</option>
+                <option value={90}>90 dni</option>
+              </select>
+              <span className="text-[11px] text-gray-400 ml-auto">{smtpTotal} emailov</span>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Cas</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Typ</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Prijemca</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-16">Stav</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Chyba</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {smtpEntries.length === 0 ? (
+                      <tr><td colSpan={5} className="text-center py-10 text-gray-400">{smtpLoading ? 'Nacitavam...' : 'Ziadne zaznamy'}</td></tr>
+                    ) : smtpEntries.map((e, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{fmt(e.ts)}</td>
+                        <td className="px-4 py-2.5"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-semibold">{e.type}</span></td>
+                        <td className="px-4 py-2.5 text-gray-700 max-w-[220px] truncate" title={e.to}>{e.to ?? '—'}</td>
+                        <td className="px-4 py-2.5">
+                          {e.ok
+                            ? <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] font-semibold">OK</span>
+                            : <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold">ERR</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-red-400 max-w-[200px] truncate" title={e.err}>{e.err ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>

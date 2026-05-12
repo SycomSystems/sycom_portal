@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer'
+import fs from 'fs'
+import path from 'path'
 import { prisma } from './prisma'
 
 interface SmtpConfig {
@@ -25,6 +27,16 @@ async function createTransporter() {
   const cfg = await getSmtpConfig()
   return nodemailer.createTransport({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth })
 }
+function logSmtp(entry: Record<string, unknown>) {
+  try {
+    const logDir = '/opt/sycom-portal/logs'
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+    const month = new Date().toISOString().slice(0, 7)
+    const logFile = path.join(logDir, 'smtp-' + month + '.jsonl')
+    fs.appendFileSync(logFile, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n')
+  } catch {}
+}
+
 
 function emailLayout(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
@@ -117,7 +129,8 @@ export async function sendTicketCreated(
         ${btn('Zobraziť tiket', `${PORTAL_URL}/tickets`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendTicketCreated failed:', err.message) }
+      logSmtp({ type: 'ticket_created', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'ticket_created', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendTicketCreated failed:', err.message) }
 }
 
 export async function sendTicketAssigned(
@@ -140,7 +153,8 @@ export async function sendTicketAssigned(
         ${btn('Otvoriť tiket', `${PORTAL_URL}/tickets`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendTicketAssigned failed:', err.message) }
+      logSmtp({ type: 'ticket_assigned', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'ticket_assigned', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendTicketAssigned failed:', err.message) }
 }
 
 export async function sendTicketResolved(
@@ -165,7 +179,8 @@ export async function sendTicketResolved(
         ${btn('Zobraziť tiket', `${PORTAL_URL}/tickets`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendTicketResolved failed:', err.message) }
+      logSmtp({ type: 'ticket_resolved', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'ticket_resolved', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendTicketResolved failed:', err.message) }
 }
 
 export async function sendNewComment(
@@ -193,7 +208,8 @@ export async function sendNewComment(
         `),
       })
     }
-  } catch (err: any) { console.error('[email] sendNewComment failed:', err.message) }
+      logSmtp({ type: 'new_comment', to: undefined, ok: true })
+  } catch (err: any) { logSmtp({ type: 'new_comment', to: undefined, ok: false, err: (err as any).message }); console.error('[email] sendNewComment failed:', err.message) }
 }
 
 export async function sendTicketStatusChanged(
@@ -219,7 +235,8 @@ export async function sendTicketStatusChanged(
         ${btn('Zobraziť tiket', `${PORTAL_URL}/tickets`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendTicketStatusChanged failed:', err.message) }
+      logSmtp({ type: 'ticket_status', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'ticket_status', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendTicketStatusChanged failed:', err.message) }
 }
 
 // ─── OBJEDNÁVKY ───────────────────────────────────────────────────────────────
@@ -247,7 +264,8 @@ export async function sendOrderCreated(
         ${btn('Zobraziť objednávku', `${PORTAL_URL}/orders`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendOrderCreated failed:', err.message) }
+      logSmtp({ type: 'order_created', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'order_created', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendOrderCreated failed:', err.message) }
 }
 
 export async function sendOrderOffer(
@@ -273,7 +291,8 @@ export async function sendOrderOffer(
         ${btn('Zobraziť ponuku', `${PORTAL_URL}/orders`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendOrderOffer failed:', err.message) }
+      logSmtp({ type: 'order_offer', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'order_offer', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendOrderOffer failed:', err.message) }
 }
 
 export async function sendOrderResponse(
@@ -297,5 +316,6 @@ export async function sendOrderResponse(
         ${btn('Zobraziť objednávku', `${PORTAL_URL}/orders`)}
       `),
     })
-  } catch (err: any) { console.error('[email] sendOrderResponse failed:', err.message) }
+      logSmtp({ type: 'order_response', to: toEmail, ok: true })
+  } catch (err: any) { logSmtp({ type: 'order_response', to: toEmail, ok: false, err: (err as any).message }); console.error('[email] sendOrderResponse failed:', err.message) }
 }
