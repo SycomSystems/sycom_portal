@@ -25,3 +25,5 @@ prisma/*.db
 
 # Poller logs
 logs/
+public/uploads/attachments/
+public/uploads/logo*
