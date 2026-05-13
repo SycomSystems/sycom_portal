@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { Save, KeyRound, CheckCircle, AlertCircle, User } from 'lucide-react'
+import { Save, KeyRound, CheckCircle, AlertCircle, User, Smartphone, Copy } from 'lucide-react'
 
 export default function ProfilePage() {
   const { data: session, update } = useSession()
@@ -17,6 +17,22 @@ export default function ProfilePage() {
   const [newPass2, setNewPass2] = useState('')
   const [passLoading, setPassLoading] = useState(false)
   const [passStatus, setPassStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [portalUrl, setPortalUrl] = useState('')
+
+  useEffect(() => {
+    setPortalUrl(window.location.origin)
+  }, [])
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(portalUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      // fallback
+    }
+  }
 
   useEffect(() => {
     if (session?.user) {
@@ -156,6 +172,36 @@ export default function ProfilePage() {
                 {passLoading ? 'Mením...' : 'Zmeniť heslo'}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Mobilná aplikácia */}
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <Smartphone size={16} className="text-sycom-500" />
+              Mobilná aplikácia
+            </h2>
+          </div>
+          <div className="p-6 space-y-3">
+            <p className="text-sm text-gray-500">
+              Pre pripojenie mobilnej aplikácie zadajte túto adresu servera:
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono text-gray-800 break-all">
+                {portalUrl}
+              </code>
+              <button
+                onClick={handleCopyUrl}
+                className="flex items-center gap-2 px-4 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 transition-colors shrink-0"
+              >
+                {copied ? <CheckCircle size={15} /> : <Copy size={15} />}
+                {copied ? 'Skopírované' : 'Kopírovať'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">
+              Adresu zadajte v mobilnej appke v sekcii Profil → Adresa servera.
+            </p>
           </div>
         </div>
 

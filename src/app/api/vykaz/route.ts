@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { getMobileSession } from '@/lib/mobile-session'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -11,7 +12,7 @@ const HOURS_LABELS: Record<string, string> = {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
+  const session = await getMobileSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

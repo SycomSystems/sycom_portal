@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { getMobileSession } from '@/lib/mobile-session'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
+  const session = await getMobileSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const usages = await prisma.ticketStockUsage.findMany({
     where: { ticketId: params.id },
@@ -18,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
+  const session = await getMobileSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (role !== 'ADMIN' && role !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
