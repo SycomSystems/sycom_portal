@@ -204,6 +204,7 @@ model User {
   assignedClients      ClientTechnician[]
   auditLogs            AuditLog[]
   stockUsagesCreated   TicketStockUsage[]
+  expoPushToken String?
 }
 
 model Session {

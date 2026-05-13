@@ -1,3 +1,4 @@
+import { notifyStaffNewTicket } from '@/lib/push-notifications'
 import { logAudit } from '@/lib/audit'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -179,5 +180,6 @@ export async function POST(req: NextRequest) {
   }
 
   await logAudit(userId, 'ticket', ticket.id, 'CREATE', null, { subject: ticket.subject, clientId: ticket.clientId })
-    return NextResponse.json(ticket, { status: 201 })
+    notifyStaffNewTicket(prisma, ticket, session.user.id).catch(console.error)
+  return NextResponse.json(ticket, { status: 201 })
 }
