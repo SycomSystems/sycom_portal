@@ -135,7 +135,7 @@ export async function sendTicketCreated(
 
 export async function sendTicketAssigned(
   toEmail: string,
-  opts: { ticketNumber: number; subject: string; agentName: string }
+  opts: { ticketNumber: number; subject: string; agentName: string; clientName?: string; assignedBy?: string }
 ) {
   try {
     const cfg = await getSmtpConfig()
@@ -149,6 +149,8 @@ export async function sendTicketAssigned(
         <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px;width:100%;">
           ${infoRow('Číslo tiketu:', `#${opts.ticketNumber}`)}
           ${infoRow('Predmet:', opts.subject)}
+          ${opts.clientName ? infoRow('Klient:', opts.clientName) : ''}
+          ${opts.assignedBy ? infoRow('Pridelil:', opts.assignedBy) : ''}
         </table>
         ${btn('Otvoriť tiket', `${PORTAL_URL}/tickets`)}
       `),
@@ -159,7 +161,7 @@ export async function sendTicketAssigned(
 
 export async function sendTicketResolved(
   toEmail: string,
-  opts: { ticketNumber: number; subject: string }
+  opts: { ticketNumber: number; subject: string; clientName?: string; resolvedBy?: string }
 ) {
   try {
     const cfg = await getSmtpConfig()
@@ -173,7 +175,9 @@ export async function sendTicketResolved(
         <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px;width:100%;">
           ${infoRow('Číslo tiketu:', `#${opts.ticketNumber}`)}
           ${infoRow('Predmet:', opts.subject)}
+          ${opts.clientName ? infoRow('Klient:', opts.clientName) : ''}
           ${infoRow('Stav:', badge('Vyriešený', '#16a34a'))}
+          ${opts.resolvedBy ? infoRow('Vyriešil:', opts.resolvedBy) : ''}
         </table>
         <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Ak problém pretrváva, vytvorte prosím nový tiket.</p>
         ${btn('Zobraziť tiket', `${PORTAL_URL}/tickets`)}
@@ -185,7 +189,7 @@ export async function sendTicketResolved(
 
 export async function sendNewComment(
   recipients: { email: string; name: string }[],
-  opts: { ticketNumber: number; subject: string; commentAuthor: string; commentText: string }
+  opts: { ticketNumber: number; subject: string; commentAuthor: string; commentText: string; clientName?: string }
 ) {
   try {
     const cfg = await getSmtpConfig()
@@ -199,6 +203,7 @@ export async function sendNewComment(
           <p style="margin:0 0 24px;font-size:14px;color:#6b7280;">Dobrý deň, <strong>${r.name}</strong>.</p>
           <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:20px;width:100%;">
             ${infoRow('Tiket:', `#${opts.ticketNumber} — ${opts.subject}`)}
+            ${opts.clientName ? infoRow('Klient:', opts.clientName) : ''}
             ${infoRow('Autor:', opts.commentAuthor)}
           </table>
           <div style="background:#eff6ff;border-left:3px solid #2563eb;border-radius:4px;padding:14px 18px;margin-bottom:24px;">
@@ -214,7 +219,7 @@ export async function sendNewComment(
 
 export async function sendTicketStatusChanged(
   toEmail: string,
-  opts: { ticketNumber: number; subject: string; newStatus: string }
+  opts: { ticketNumber: number; subject: string; newStatus: string; clientName?: string; changedBy?: string }
 ) {
   const statusLabels: Record<string, string> = { IN_PROGRESS:'V riešení', RESOLVED:'Vyriešený', CLOSED:'Uzavretý', OPEN:'Otvorený' }
   const statusColors: Record<string, string> = { IN_PROGRESS:'#d97706', RESOLVED:'#16a34a', CLOSED:'#6b7280', OPEN:'#2563eb' }
@@ -230,7 +235,9 @@ export async function sendTicketStatusChanged(
         <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px;width:100%;">
           ${infoRow('Číslo tiketu:', `#${opts.ticketNumber}`)}
           ${infoRow('Predmet:', opts.subject)}
+          ${opts.clientName ? infoRow('Klient:', opts.clientName) : ''}
           ${infoRow('Nový stav:', badge(statusLabels[opts.newStatus] ?? opts.newStatus, statusColors[opts.newStatus] ?? '#2563eb'))}
+          ${opts.changedBy ? infoRow('Zmenil:', opts.changedBy) : ''}
         </table>
         ${btn('Zobraziť tiket', `${PORTAL_URL}/tickets`)}
       `),
