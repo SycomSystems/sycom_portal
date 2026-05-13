@@ -261,7 +261,7 @@ export default function TicketsPage() {
             </Link>
           ))}
         </div>
-      </div>
+
         {/* Pagination */}
         {(data?.total ?? 0) > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-3 px-1">
@@ -290,6 +290,7 @@ export default function TicketsPage() {
             </div>
           </div>
         )}
+      </div>
     </PortalLayout>
   )
 }

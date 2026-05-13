@@ -15,7 +15,7 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
         />
       )}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="pt-[62px] md:ml-60 min-h-screen overflow-x-hidden">
+      <main className="pt-[62px] md:ml-60 min-h-screen">
         {children}
       </main>
     </>
