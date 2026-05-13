@@ -146,10 +146,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         sendTicketStatusChanged(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status, clientName: updated.client?.name, changedBy: (session.user as any).name ?? undefined }).catch(() => {})
       }
     }
-    if (commentBody && !isInternal) {
-      const recipients = getRecipients()
-      if (recipients.length > 0) {
-        sendNewComment(recipients, {
+    if (commentBody) {
+      // Interné komentáre: len staff (admin/agent). Verejné: všetci okrem autora.
+      const commentRecipients = getCommentRecipients(isInternal ?? false)
+      if (commentRecipients.length > 0) {
+        sendNewComment(commentRecipients, {
           ticketNumber: updated.ticketNumber,
           subject: updated.subject,
           commentAuthor: (session.user as any).name ?? 'Neznámy',
