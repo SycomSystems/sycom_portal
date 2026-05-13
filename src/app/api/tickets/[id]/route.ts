@@ -132,6 +132,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return Array.from(map.values())
     }
 
+    // Príjemcovia pre komentáre — interné NIKDY ku klientom, autor nedostane kópiu
+    function getCommentRecipients(internal: boolean) {
+      const map = new Map<string, { email: string; name: string }>()
+      for (const a of adminUsers) {
+        if (!a.email || a.id === userId) continue
+        if (!a.notifyAll) {
+          const isAssignee = updated.assignee?.id === a.id
+          const isCreator  = updated.creator?.id === a.id
+          if (!isAssignee && !isCreator) continue
+        }
+        map.set(a.email, { email: a.email, name: a.name ?? 'Admin' })
+      }
+      if (updated.assignee?.email && updated.assignee.id !== userId)
+        map.set(updated.assignee.email, { email: updated.assignee.email, name: updated.assignee.name ?? '' })
+      if (updated.creator?.email && updated.creator.id !== userId)
+        map.set(updated.creator.email, { email: updated.creator.email, name: updated.creator.name ?? '' })
+      if (!internal) {
+        for (const u of clientUsers) {
+          if (u.email && u.id !== userId) map.set(u.email, { email: u.email, name: u.name ?? '' })
+        }
+      }
+      return Array.from(map.values())
+    }
+
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
       sendTicketAssigned(updated.assignee.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, agentName: updated.assignee.name ?? '', clientName: updated.client?.name, assignedBy: (session.user as any).name ?? undefined }).catch(() => {})
     }
