@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     if (resolvedAssigneeId) {
       const assignee = await prisma.user.findUnique({ where: { id: resolvedAssigneeId }, select: { email: true, name: true } })
       if (assignee?.email) {
-        sendTicketAssigned(assignee.email, { ticketNumber: ticket.ticketNumber, subject: ticket.subject, agentName: assignee.name ?? '' }).catch(() => {})
+        sendTicketAssigned(assignee.email, { ticketNumber: ticket.ticketNumber, subject: ticket.subject, agentName: assignee.name ?? '', clientName: ticket.client?.name, assignedBy: (session.user as any).name ?? undefined }).catch(() => {})
       }
     }
     // Email adminovi (notifikacia o novom tikete)
@@ -164,6 +164,8 @@ export async function POST(req: NextRequest) {
           subject:      ticket.subject,
           priority:     ticket.priority,
           category:     ticket.category,
+          clientName:   ticket.client?.name,
+          creatorName:  ticket.creator?.name ?? undefined,
         }).catch(() => {})
       }
     }

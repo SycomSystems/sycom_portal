@@ -133,17 +133,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     if (assigneeId && assigneeId !== ticket.assigneeId && updated.assignee?.email) {
-      sendTicketAssigned(updated.assignee.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, agentName: updated.assignee.name ?? '' }).catch(() => {})
+      sendTicketAssigned(updated.assignee.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, agentName: updated.assignee.name ?? '', clientName: updated.client?.name, assignedBy: (session.user as any).name ?? undefined }).catch(() => {})
     }
     if (isResolving) {
       for (const r of getRecipients()) {
-        sendTicketResolved(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject }).catch(() => {})
+        sendTicketResolved(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, clientName: updated.client?.name, resolvedBy: (session.user as any).name ?? undefined }).catch(() => {})
       }
     }
     const statusChanged = status && status !== ticket.status && status !== 'RESOLVED'
     if (statusChanged && (status === 'IN_PROGRESS' || status === 'CLOSED')) {
       for (const r of getRecipients()) {
-        sendTicketStatusChanged(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status }).catch(() => {})
+        sendTicketStatusChanged(r.email, { ticketNumber: updated.ticketNumber, subject: updated.subject, newStatus: status, clientName: updated.client?.name, changedBy: (session.user as any).name ?? undefined }).catch(() => {})
       }
     }
     if (commentBody && !isInternal) {
@@ -154,6 +154,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           subject: updated.subject,
           commentAuthor: (session.user as any).name ?? 'Neznámy',
           commentText: commentBody,
+          clientName: updated.client?.name,
         }).catch(() => {})
       }
     }
