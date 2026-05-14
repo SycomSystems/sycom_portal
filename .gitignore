@@ -27,3 +27,5 @@ prisma/*.db
 logs/
 public/uploads/attachments/
 public/uploads/logo*
+*.bak
+*.bak2
