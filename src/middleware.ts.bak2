@@ -1,0 +1,53 @@
+// src/middleware.ts
+import { withAuth } from 'next-auth/middleware'
+import { NextResponse } from 'next/server'
+
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token
+    const pathname = req.nextUrl.pathname
+    const role = (token as any)?.role
+
+    // Routes accessible by AGENT (not ADMIN-only)
+    const agentAllowed = [
+      '/admin/sklad',
+      '/admin/reports',
+    ]
+    const isAgentAllowed = agentAllowed.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+    // Admin-only routes (block non-ADMIN unless explicitly agent-allowed)
+    if (pathname.startsWith('/admin') && role !== 'ADMIN' && !isAgentAllowed) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // Agent-allowed admin routes: block CLIENT roles
+    if (isAgentAllowed && role !== 'ADMIN' && role !== 'AGENT') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // Knowledge base — staff only
+    if (pathname.startsWith('/kb') && role !== 'ADMIN' && role !== 'AGENT') {
+      return NextResponse.redirect(new URL('/tickets', req.url))
+    }
+
+    return NextResponse.next()
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+  }
+)
+
+export const config = {
+  matcher: [
+    // Stránky — middleware chráni pred neprihlásením
+    '/dashboard/:path*',
+    '/tickets/:path*',
+    '/kb/:path*',
+    '/admin/:path*',
+    '/settings/:path*',
+    // API routes sú VYNECHANÉ — každý handler si overuje auth sám
+    // cez getServerSession(), čo funguje aj pre mobile database sessions
+  ],
+}

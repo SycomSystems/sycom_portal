@@ -9,6 +9,7 @@ interface AuditEntry {
   id: string; entityType: string; entityId: string; action: string
   oldValue: string | null; newValue: string | null; createdAt: string
   user: { id: string; name: string; email: string }
+  ip?: string | null
 }
 
 const LEVEL_STYLES: Record<string, string> = {
@@ -30,6 +31,8 @@ const ACTION_LABELS: Record<string, string> = {
   login_failed:          'Prihlasenie neuspesne',
   login_failed_unknown:  'Prihlasenie - neznamy user',
   login_failed_inactive: 'Prihlasenie - neaktivny',
+  MOBILE_LOGIN:           'Mobilne prihlasenie',
+  MOBILE_LOGIN_FAILED:    'Mobilne prihlasenie — chyba',
 }
 
 export default function DebugPage() {
@@ -258,11 +261,12 @@ export default function DebugPage() {
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Stara hodnota</th>
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Nova hodnota</th>
                       <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Tiket</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">IP adresa</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredAudit.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-10 text-gray-400">Ziadne zaznamy</td></tr>
+                      <tr><td colSpan={7} className="text-center py-10 text-gray-400">Ziadne zaznamy</td></tr>
                     ) : filteredAudit.map(l => (
                       <tr key={l.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{fmt(l.createdAt)}</td>
@@ -281,6 +285,7 @@ export default function DebugPage() {
                             </Link>
                           )}
                         </td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-gray-400 whitespace-nowrap">{l.ip ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
