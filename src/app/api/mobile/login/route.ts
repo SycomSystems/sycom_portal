@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { encode } from 'next-auth/jwt'
+import { logAudit } from '@/lib/audit'
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json()
 
     if (!email || !password) {
-      return NextResponse.json({ error: 'Chýba email alebo heslo' }, { status: 400 })
+      logAudit(user.id, 'auth', user.id, 'MOBILE_LOGIN', null, { email: user.email, role: user.role }, req.headers.get('x-forwarded-for') ?? undefined).catch(() => {})
+    return NextResponse.json({ error: 'Chýba email alebo heslo' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({
@@ -26,6 +28,7 @@ export async function POST(req: NextRequest) {
 
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) {
+      logAudit(user.id, 'auth', user.id, 'MOBILE_LOGIN_FAILED', null, { email: user.email, reason: 'wrong_password' }, req.headers.get('x-forwarded-for') ?? undefined).catch(() => {})
       return NextResponse.json({ error: 'Nesprávne prihlasovacie údaje' }, { status: 401 })
     }
 
