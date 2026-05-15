@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, emailAlias, pricing } = await req.json()
+  const { name, contactPerson, phone, ico, dic, dicDph, address, www, notes, emailAlias, pricing, technicianIds } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
   try {
@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
       },
       include: { pricing: true, _count: { select: { users: true } } },
     })
+    if (Array.isArray(technicianIds) && technicianIds.length > 0) {
+      await prisma.clientTechnician.createMany({ data: technicianIds.map((uid: string) => ({ clientId: client.id, userId: uid })) })
+    }
     return NextResponse.json(client, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Client name already exists' }, { status: 409 })
