@@ -311,7 +311,7 @@ function VykazPage() {
                 <thead><tr className="border-b border-gray-100">
                   {[['date','Datum'],['name','Nazov'],['type','Typ hodin'],['qty','Hodiny'],['price','Cena/hod'],['total','Spolu'],['who','Zapisal']].map(([col,label])=>(<th key={col} onClick={()=>toggleSort(col)} className="no-print px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 select-none whitespace-nowrap"><span className="flex items-center gap-1">{label} <SortIcon col={col}/></span></th>))}
                   {['Datum','Nazov','Typ hodin','Hodiny','Cena/hod','Spolu','Zapisal'].map(l=>(<th key={l} className="hidden print:table-cell px-3 py-2 text-left text-xs font-bold text-gray-700 border-b border-gray-300">{l}</th>))}
-                  {role==='ADMIN'&&<th className="no-print px-4 py-3"></th>}
+                  {(role==='ADMIN'||role==='AGENT')&&<th className="no-print px-4 py-3"></th>}
                 </tr></thead>
                 <tbody className="divide-y divide-gray-100">
                   {sortedHours.length===0?(<tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">Ziadne hodiny.</td></tr>):sortedHours.map((row:any,i:number)=>(
@@ -327,7 +327,7 @@ function VykazPage() {
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0?fmt(row.pricePerHour)+' EUR':'-'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs font-semibold text-gray-800">{row.totalPrice>0?fmt(row.totalPrice)+' EUR':'-'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500">{row.addedBy}</td>
-                      {role==='ADMIN'&&(<td className="no-print px-3 py-2.5 whitespace-nowrap">{row.source==='manual'?(<div className="flex items-center gap-1"><button onClick={()=>openEdit(row)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13}/></button><button onClick={()=>handleDelete(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13}/></button></div>):<span className="text-[10px] text-gray-300">tiket</span>}</td>)}
+                      {(role==='ADMIN'||role==='AGENT')&&(<td className="no-print px-3 py-2.5 whitespace-nowrap">{row.source==='manual'&&(role==='ADMIN'||row.userId===sessionUserId)?(<div className="flex items-center gap-1"><button onClick={()=>openEdit(row)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13}/></button><button onClick={()=>handleDelete(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13}/></button></div>):role==='ADMIN'&&row.source!=='manual'?<span className="text-[10px] text-gray-300">tiket</span>:null}</td>)}
                     </tr>
                   ))}
                 </tbody>

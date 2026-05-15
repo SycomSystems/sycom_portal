@@ -449,7 +449,7 @@ export default function SkladPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {items.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())).map(item => (
-                    <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.minStock > 0 && item.currentStock <= item.minStock ? 'bg-orange-50/50' : ''}`}>
+                    <tr key={item.id} className={`hover:bg-gray-50 transition-colors cursor-pointer ${item.minStock > 0 && item.currentStock <= item.minStock ? 'bg-orange-50/50' : ''}`} onClick={() => router.push(`/admin/sklad/items/${item.id}`)}>
                       <td className="px-4 py-3 font-semibold text-gray-900">
                         {item.name}
                         {item.location && <span className="ml-1.5 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.location}</span>}
@@ -482,7 +482,7 @@ export default function SkladPage() {
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => router.push(`/admin/sklad/items/${item.id}`)}
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/admin/sklad/items/${item.id}`) }}
                           className="flex items-center gap-1 text-xs px-2.5 py-1.5 text-sycom-600 bg-sycom-50 border border-sycom-200 rounded-lg hover:bg-sycom-100 transition-colors font-semibold">
                           <Eye size={11}/> Detail
                         </button>

@@ -245,6 +245,7 @@ export default function TicketDetailPage() {
 
   const isStaff = role === 'ADMIN' || role === 'AGENT'
   const isAdmin = role === 'ADMIN'
+  const canEdit = isAdmin || (isStaff && ticket?.creatorId === (session?.user as any)?.id)
   const slaBreached = ticket.slaDeadline && isSlaBreached(ticket.slaDeadline)
   const slaWarn = ticket.slaDeadline && isSlaWarning(ticket.slaDeadline)
   const totalHours = ticket.totalWorkedHours ?? 0
@@ -279,7 +280,7 @@ export default function TicketDetailPage() {
               <span className={'text-xs font-bold px-3 py-1 rounded-full ' + (STATUS_COLORS[ticket.status] ?? 'bg-gray-100 text-gray-500')}>
                 {statusLabels[ticket.status] ?? ticket.status}
               </span>
-              {isAdmin && !editing && (
+              {canEdit && !editing && (
                 <button onClick={startEdit} title="Upravit tiket" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors">
                   <Pencil size={14} />
                 </button>
@@ -323,8 +324,11 @@ export default function TicketDetailPage() {
               ) : <span className="text-gray-300">-</span>}
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">Priradeny</p>
-              {ticket.assignee ? <span className="flex items-center gap-1 text-gray-800 font-medium"><User size={11} /> {ticket.assignee.name}</span> : <span className="text-gray-300">Nepriradeny</span>}
+              <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">Priradený</p>
+              {(ticket.coAssignees ?? []).length > 0
+                ? <div className="flex flex-col gap-1">{(ticket.coAssignees ?? []).map((a: any) => <span key={a.userId} className="flex items-center gap-1 text-gray-800 font-medium"><User size={11} />{a.user.name}</span>)}</div>
+                : ticket.assignee ? <span className="flex items-center gap-1 text-gray-800 font-medium"><User size={11} /> {ticket.assignee.name}</span>
+                : <span className="text-gray-300">Nepriradený</span>}
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
               <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">SLA</p>

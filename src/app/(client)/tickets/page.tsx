@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Search, Plus, Filter, Building2, ChevronRight } from 'lucide-react'
 import { formatDateTime, priorityLabels, statusLabels } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function TicketsPage() {
+  const router = useRouter()
   const [search,   setSearch]   = useState('')
   const [statuses, setStatuses] = useState<Set<string>>(new Set(['OPEN', 'IN_PROGRESS', 'WAITING']))
   const [priority, setPriority] = useState('Všetky')
@@ -176,6 +178,7 @@ export default function TicketsPage() {
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">ID</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Predmet</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
+                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Technik</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Stav</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Priorita</th>
                 <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Vytvorené</th>
@@ -185,14 +188,14 @@ export default function TicketsPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                <tr><td colSpan={8} className="px-5 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
+                <tr><td colSpan={9} className="px-5 py-4 text-center text-sm text-gray-400">Načítavam...</td></tr>
               ) : tickets.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
+                <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-gray-400">Žiadne tikety.</td></tr>
               ) : tickets.map((t: any) => (
-                <tr key={t.id} className="hover:bg-sycom-50 transition-colors">
+                <tr key={t.id} className="hover:bg-sycom-50 transition-colors cursor-pointer" onClick={() => router.push(`/tickets/${t.id}`)}>
                   {isAdmin && (
                     <td className="px-4 py-3.5">
-                      <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
+                      <input type="checkbox" checked={selectedIds.has(t.id)} onChange={(e) => { e.stopPropagation(); toggleSelect(t.id) }}
                         className="rounded border-gray-300 text-sycom-500 cursor-pointer" />
                     </td>
                   )}
@@ -208,6 +211,12 @@ export default function TicketsPage() {
                         <Building2 size={12} className="text-gray-400 shrink-0" />{t.client.name}
                       </span>
                     ) : <span className="text-xs text-gray-300">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {(t.coAssignees ?? []).length > 0
+                      ? <div className="flex flex-wrap gap-1">{(t.coAssignees ?? []).map((a: any) => <span key={a.userId} className="text-[11px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full whitespace-nowrap">{a.user.name}</span>)}</div>
+                      : t.assignee?.name ? <span className="text-xs text-gray-500">{t.assignee.name}</span>
+                      : <span className="text-xs text-gray-300">—</span>}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-500'}`}>

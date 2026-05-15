@@ -205,6 +205,7 @@ model User {
   auditLogs            AuditLog[]
   stockUsagesCreated   TicketStockUsage[]
   expoPushToken String?
+  coAssignedTickets TicketAssignee[]
 }
 
 model Session {
@@ -267,6 +268,7 @@ model Ticket {
   attachments   Attachment[]
   notifications Notification[]
   stockUsages   TicketStockUsage[]
+  coAssignees   TicketAssignee[]
   @@map("tickets")
 }
 
@@ -519,4 +521,14 @@ model OrderItem {
   updatedAt  DateTime @updatedAt
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   @@map("order_items")
+}
+
+model TicketAssignee {
+  ticketId  String
+  userId    String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([ticketId, userId])
+  @@map("ticket_assignees")
 }

@@ -256,7 +256,7 @@ export default function RecurringReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredTickets.map(t=>(
-                    <tr key={t.id} className={`hover:bg-gray-50 ${!t.isActive?'opacity-50':''}`}>
+                    <tr key={t.id} className={`hover:bg-gray-50 cursor-pointer ${!t.isActive?'opacity-50':''}`} onClick={()=>openEditTicket(t)}>
                       <td className={tdCls}>
                         <div className="font-medium text-gray-900">{t.subject}</div>
                         {t.description&&<div className="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{t.description}</div>}
@@ -277,14 +277,14 @@ export default function RecurringReportsPage() {
                         {new Date(t.nextRunAt).toLocaleString('sk-SK',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
                       </td>
                       <td className={tdCls}>
-                        <button onClick={()=>toggleTicket(t)}>
+                        <button onClick={(e)=>{e.stopPropagation();toggleTicket(t)}}>
                           {t.isActive?<ToggleRight size={22} className="text-green-500"/>:<ToggleLeft size={22} className="text-gray-400"/>}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
-                          <button onClick={()=>openEditTicket(t)} className="text-gray-400 hover:text-blue-600 p-1 rounded"><Edit2 size={15}/></button>
-                          <button onClick={()=>setDelTarget({id:t.id,type:'ticket'})} className="text-gray-400 hover:text-red-600 p-1 rounded"><Trash2 size={15}/></button>
+                          <button onClick={(e)=>{e.stopPropagation();openEditTicket(t)}} className="text-gray-400 hover:text-blue-600 p-1 rounded"><Edit2 size={15}/></button>
+                          <button onClick={(e)=>{e.stopPropagation();setDelTarget({id:t.id,type:'ticket'})}} className="text-gray-400 hover:text-red-600 p-1 rounded"><Trash2 size={15}/></button>
                         </div>
                       </td>
                     </tr>
@@ -306,7 +306,7 @@ export default function RecurringReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredReports.map(r=>(
-                    <tr key={r.id} className={`hover:bg-gray-50 ${!r.isActive?'opacity-50':''}`}>
+                    <tr key={r.id} className={`hover:bg-gray-50 cursor-pointer ${!r.isActive?'opacity-50':''}`} onClick={()=>openEditReport(r)}>
                       <td className={tdCls}>
                         <div className="font-medium text-gray-900">{r.name}</div>
                         {r.note&&<div className="text-xs text-gray-400 mt-0.5">{r.note}</div>}
@@ -325,14 +325,14 @@ export default function RecurringReportsPage() {
                         {new Date(r.nextRunAt).toLocaleString('sk-SK',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
                       </td>
                       <td className={tdCls}>
-                        <button onClick={()=>toggleReport(r)}>
+                        <button onClick={(e)=>{e.stopPropagation();toggleReport(r)}}>
                           {r.isActive?<ToggleRight size={22} className="text-green-500"/>:<ToggleLeft size={22} className="text-gray-400"/>}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
-                          <button onClick={()=>openEditReport(r)} className="text-gray-400 hover:text-blue-600 p-1 rounded"><Edit2 size={15}/></button>
-                          <button onClick={()=>setDelTarget({id:r.id,type:'report'})} className="text-gray-400 hover:text-red-600 p-1 rounded"><Trash2 size={15}/></button>
+                          <button onClick={(e)=>{e.stopPropagation();openEditReport(r)}} className="text-gray-400 hover:text-blue-600 p-1 rounded"><Edit2 size={15}/></button>
+                          <button onClick={(e)=>{e.stopPropagation();setDelTarget({id:r.id,type:'report'})}} className="text-gray-400 hover:text-red-600 p-1 rounded"><Trash2 size={15}/></button>
                         </div>
                       </td>
                     </tr>

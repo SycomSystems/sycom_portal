@@ -49,13 +49,16 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const patchRole = (session.user as any).role
+  const patchUserId = (session.user as any).id
+  if (patchRole !== 'ADMIN' && patchRole !== 'AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   const { date, name, hoursType, hours, clientId } = await req.json()
   const existing = await prisma.manualHours.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (patchRole === 'AGENT' && existing.userId !== patchUserId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const updated = await prisma.manualHours.update({
     where: { id },
     data: {
@@ -78,6 +81,9 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const toDelete = await prisma.manualHours.findUnique({ where: { id } })
+  if (!toDelete) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (role === 'AGENT' && toDelete.userId !== (session.user as any).id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   await prisma.manualHours.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

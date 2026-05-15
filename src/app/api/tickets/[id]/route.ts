@@ -32,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       creator: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true } },
+      coAssignees: { include: { user: { select: { id: true, name: true } } } },
       team: { select: { id: true, name: true } },
       comments: { include: { author: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: 'asc' } },
       attachments: true,
@@ -86,11 +87,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (teamId !== undefined) updates.teamId = teamId
   if (isResolving) updates.resolvedAt = new Date()
   updates.updatedById = userId
-  if (isAdmin) {
+  const canEditDetails = isAdmin || (isStaff && ticket.creatorId === userId)
+  if (canEditDetails) {
     if (subject) updates.subject = subject
     if (description) updates.description = description
     if (priority) updates.priority = priority
     if (category) updates.category = category
+  }
+  if (isAdmin) {
     if (clientId !== undefined) updates.clientId = clientId ?? null
   }
   const updated = await prisma.ticket.update({
@@ -100,6 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       creator: { select: { id: true, name: true, email: true } },
       client: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true, email: true } },
+      coAssignees: { include: { user: { select: { id: true, name: true, email: true } } } },
       team: { select: { id: true, name: true } },
     },
   })

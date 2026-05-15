@@ -190,7 +190,7 @@ export default function UsersPage() {
               {loading ? (
                 <tr><td colSpan={5} className="px-5 py-4 text-center text-gray-400">Načítavam...</td></tr>
               ) : users.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => openEdit(u)}>
                   <td className="px-5 py-3">
                     <p className="font-semibold text-gray-900">{u.name}</p>
                     <p className="text-xs text-gray-400">{u.email}</p>
@@ -210,7 +210,7 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-5 py-3">
-                    <button onClick={() => handleToggleActive(u)} className="flex items-center gap-1.5 text-xs">
+                    <button onClick={(e) => { e.stopPropagation(); handleToggleActive(u) }} className="flex items-center gap-1.5 text-xs">
                       {u.isActive
                         ? <><ToggleRight size={16} className="text-green-500" /><span className="text-green-600 font-medium">Aktívny</span></>
                         : <><ToggleLeft size={16} className="text-gray-400" /><span className="text-gray-400">Neaktívny</span></>
@@ -219,9 +219,9 @@ export default function UsersPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => handleSendPassword(u)} title="Odoslať heslo" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Send size={13} /></button>
-                      <button onClick={() => openEdit(u)} title="Upraviť" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13} /></button>
-                      <button onClick={() => handleDelete(u)} title="Vymazať" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleSendPassword(u) }} title="Odoslať heslo" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Send size={13} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(u) }} title="Upraviť" className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(u) }} title="Vymazať" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>

@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   } else if (role === 'AGENT') {
     const assigned = await prisma.clientTechnician.findMany({ where: { userId }, select: { clientId: true } })
     const clientIds = assigned.map(a => a.clientId)
-    where.AND = [{ OR: [...(clientIds.length > 0 ? [{ clientId: { in: clientIds } }] : []), { assigneeId: userId }] }]
+    where.AND = [{ OR: [...(clientIds.length > 0 ? [{ clientId: { in: clientIds } }] : []), { assigneeId: userId }, { coAssignees: { some: { userId } } }] }]
   } else if (role === 'CLIENT_MANAGER') {
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { clientId: true } })
     if (me?.clientId) {
@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
         creator:  { select: { id: true, name: true, email: true } },
         client:   { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true } },
+        coAssignees: { include: { user: { select: { id: true, name: true } } } },
         team:     { select: { id: true, name: true } },
         updatedBy: { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
@@ -106,14 +107,28 @@ export async function POST(req: NextRequest) {
     resolvedClientId = me?.clientId ?? null
   }
 
-  // Auto-assign technician from client if not provided
+  // Auto-assign technicians based on role + client
   let resolvedAssigneeId = assigneeId ?? null
-  if (!resolvedAssigneeId && resolvedClientId) {
-    const tech = await prisma.clientTechnician.findFirst({
+  let coAssigneeIds: string[] = []
+  if (resolvedClientId) {
+    const techs = await prisma.clientTechnician.findMany({
       where: { clientId: resolvedClientId },
       select: { userId: true },
     })
-    resolvedAssigneeId = tech?.userId ?? null
+    const techIds = techs.map((t: any) => t.userId)
+    if (role === 'AGENT') {
+      resolvedAssigneeId = userId
+      coAssigneeIds = Array.from(new Set([userId, ...techIds]))
+    } else {
+      if (!resolvedAssigneeId && techIds.length > 0) resolvedAssigneeId = techIds[0]
+      coAssigneeIds = [...techIds]
+    }
+  } else if (role === 'AGENT') {
+    resolvedAssigneeId = resolvedAssigneeId ?? userId
+    coAssigneeIds = resolvedAssigneeId ? [resolvedAssigneeId] : [userId]
+  }
+  if (resolvedAssigneeId && !coAssigneeIds.includes(resolvedAssigneeId)) {
+    coAssigneeIds = [resolvedAssigneeId, ...coAssigneeIds]
   }
   const resolvedSla = slaDeadline ? new Date(slaDeadline) : getSlaDeadline(priority)
   const ticketNumber = await generateTicketNumber()
@@ -135,6 +150,12 @@ export async function POST(req: NextRequest) {
       client:  { select: { id: true, name: true } },
     },
   })
+  if (coAssigneeIds.length > 0) {
+    await prisma.ticketAssignee.createMany({
+      data: coAssigneeIds.map((uid: string) => ({ ticketId: ticket.id, userId: uid })),
+      skipDuplicates: true,
+    })
+  }
 
   ;(async () => {
     const { sendTicketCreated, sendTicketAssigned } = await import('@/lib/email')
@@ -148,11 +169,13 @@ export async function POST(req: NextRequest) {
         clientName: ticket.client?.name,
       }).catch(() => {})
     }
-    // Email agentovi (pridelenie)
-    if (resolvedAssigneeId) {
-      const assignee = await prisma.user.findUnique({ where: { id: resolvedAssigneeId }, select: { email: true, name: true } })
-      if (assignee?.email) {
-        sendTicketAssigned(assignee.email, { ticketNumber: ticket.ticketNumber, subject: ticket.subject, agentName: assignee.name ?? '', clientName: ticket.client?.name, assignedBy: (session.user as any).name ?? undefined }).catch(() => {})
+    // Email všetkým co-assignees (pridelenie)
+    for (const aId of coAssigneeIds) {
+      if (aId !== userId) {
+        const assignee = await prisma.user.findUnique({ where: { id: aId }, select: { email: true, name: true } })
+        if (assignee?.email) {
+          sendTicketAssigned(assignee.email, { ticketNumber: ticket.ticketNumber, subject: ticket.subject, agentName: assignee.name ?? '', clientName: ticket.client?.name, assignedBy: (session.user as any).name ?? undefined }).catch(() => {})
+        }
       }
     }
     // Email adminovi (notifikacia o novom tikete)
@@ -171,14 +194,16 @@ export async function POST(req: NextRequest) {
     }
   })().catch(() => {})
 
-  // In-app notifikacia pre technika
-  if (resolvedAssigneeId) {
-    createNotification(
-      resolvedAssigneeId,
-      'NEW_TICKET',
-      `Novy tiket #${ticket.ticketNumber}: ${ticket.subject}`,
-      ticket.id
-    ).catch(() => {})
+  // In-app notifikacia pre všetkých priradených
+  for (const aId of coAssigneeIds) {
+    if (aId !== userId) {
+      createNotification(
+        aId,
+        'NEW_TICKET',
+        `Novy tiket #${ticket.ticketNumber}: ${ticket.subject}`,
+        ticket.id
+      ).catch(() => {})
+    }
   }
 
   await logAudit(userId, 'ticket', ticket.id, 'CREATE', null, { subject: ticket.subject, clientId: ticket.clientId })
