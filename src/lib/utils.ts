@@ -58,7 +58,7 @@ export const priorityLabels: Record<string, string> = {
 
 export const statusLabels: Record<string, string> = {
   OPEN: 'Otvorený', IN_PROGRESS: 'V riešení', WAITING: 'Čaká',
-  RESOLVED: 'Vyriešený', CLOSED: 'Uzavretý',
+  RESOLVED: 'Vyriešený', CLOSED: 'Zrušený',
 }
 
 export const categoryLabels: Record<string, string> = {

@@ -40,6 +40,8 @@ export async function GET(req: NextRequest) {
   const search   = searchParams.get('search')
   const page     = parseInt(searchParams.get('page') || '1')
   const limit    = parseInt(searchParams.get('limit') || '20')
+  const sortBy   = searchParams.get('sortBy') || 'updatedAt'
+  const sortDir  = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc'
 
   const where: any = {}
 
@@ -77,7 +79,7 @@ export async function GET(req: NextRequest) {
         updatedBy: { select: { id: true, name: true } },
         _count:   { select: { comments: true } },
       },
-      orderBy: [{ updatedAt: 'desc' }],
+      orderBy: [{ [['updatedAt','createdAt','status','priority','ticketNumber'].includes(sortBy) ? sortBy : 'updatedAt']: sortDir }],
       skip:  (page - 1) * limit,
       take:  limit,
     }),

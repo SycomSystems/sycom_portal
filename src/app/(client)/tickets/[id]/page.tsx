@@ -50,6 +50,7 @@ export default function TicketDetailPage() {
   const [logHours, setLogHours] = useState('')
   const [logHoursType, setLogHoursType] = useState<HoursType>('STANDARD')
   const [logHoursErr, setLogHoursErr] = useState(false)
+  const [logHoursDesc, setLogHoursDesc] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [assigneeId, setAssigneeId] = useState('')
   const [newStatus, setNewStatus] = useState('')
@@ -91,7 +92,7 @@ export default function TicketDetailPage() {
       queryClient.refetchQueries({ queryKey: ['ticket', id] })
       toast.success('Tiket aktualizovany')
       setComment(''); setIsInternal(false); setNewStatus('')
-      setAssigneeId(''); setLogHours(''); setLogHoursErr(false)
+      setAssigneeId(''); setLogHours(''); setLogHoursErr(false); setLogHoursDesc('')
       setEditing(false)
     },
     onError: () => toast.error('Chyba pri aktualizacii'),
@@ -140,7 +141,7 @@ export default function TicketDetailPage() {
     if (isNaN(hrs) || hrs <= 0) { setLogHoursErr(true); toast.error('Zadajte platny pocet hodin'); return }
     setLogHoursErr(false)
     mutation.mutate({
-      comment: 'Zaevidovany cas: ' + formatHours(hrs) + ' [' + (HOURS_TYPE_OPTIONS.find(o => o.value === logHoursType)?.label ?? logHoursType) + ']',
+      comment: 'Zaevidovany cas: ' + formatHours(hrs) + ' [' + (HOURS_TYPE_OPTIONS.find(o => o.value === logHoursType)?.label ?? logHoursType) + ']' + (logHoursDesc.trim() ? '\n\nPopis prace: ' + logHoursDesc.trim() : ''),
       isInternal: true,
       workedHours: hrs,
       hoursType: logHoursType,
@@ -447,6 +448,9 @@ export default function TicketDetailPage() {
                   placeholder="napr. 1.5"
                   className={'w-full px-3 py-2 border rounded-xl text-sm focus:outline-none mb-2 ' + (logHoursErr ? 'border-red-400 bg-red-50' : 'border-sycom-200 focus:border-sycom-400')}
                 />
+                <label className="block text-[11px] font-semibold text-sycom-700 mb-1 mt-1">Popis práce</label>
+                <textarea value={logHoursDesc} onChange={e => setLogHoursDesc(e.target.value)} rows={2} placeholder="Čo bolo urobené..."
+                  className="w-full px-3 py-2 border border-sycom-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 mb-2" />
                 {logHoursErr && <p className="text-xs text-red-500 mb-2">Zadajte platne hodiny</p>}
                 <button onClick={handleLogHours} disabled={mutation.isPending || !logHours}
                   className="w-full px-3 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
