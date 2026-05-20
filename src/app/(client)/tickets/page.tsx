@@ -16,6 +16,11 @@ const PRIORITY_COLORS: Record<string, string> = {
   MEDIUM:   'bg-yellow-100 text-yellow-700',
   LOW:      'bg-gray-100 text-gray-500',
 }
+const PRIORITY_SHORT: Record<string, string> = { HIGH: 'H', MEDIUM: 'M', LOW: 'L' }
+function splitName(name: string) {
+  const parts = (name ?? '').trim().split(' ')
+  return parts.length <= 1 ? { first: name ?? '—', last: '' } : { first: parts.slice(0, -1).join(' '), last: parts[parts.length - 1] }
+}
 const STATUS_COLORS: Record<string, string> = {
   OPEN:        'bg-blue-100 text-blue-700',
   IN_PROGRESS: 'bg-purple-100 text-purple-700',
@@ -31,12 +36,19 @@ export default function TicketsPage() {
   const [priority, setPriority] = useState('Všetky')
   const [page,     setPage]     = useState(1)
   const [limit,    setLimit]    = useState(20)
+  const [sortBy,   setSortBy]   = useState('updatedAt')
+  const [sortDir,  setSortDir]  = useState<'asc'|'desc'>('desc')
   const { data: session } = useSession()
   const isAdmin = ['ADMIN', 'AGENT'].includes((session?.user as any)?.role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus,  setBulkStatus]  = useState('')
   const [bulkAssignee, setBulkAssignee] = useState('')
   const [bulkLoading,  setBulkLoading]  = useState(false)
+  const toggleSort = (field: string) => {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(field); setSortDir('desc') }
+    setPage(1)
+  }
 
   const params = new URLSearchParams()
   if (search)                params.set('search', search)
@@ -44,9 +56,11 @@ export default function TicketsPage() {
   if (priority !== 'Všetky') params.set('priority', priority)
   params.set('page', String(page))
   params.set('limit', String(limit))
+  params.set('sortBy', sortBy)
+  params.set('sortDir', sortDir)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', search, Array.from(statuses).sort().join(','), priority, page, limit],
+    queryKey: ['tickets', search, Array.from(statuses).sort().join(','), priority, page, limit, sortBy, sortDir],
     queryFn:  () => fetch(`/api/tickets?${params}`).then(r => r.json()),
     placeholderData: (prev: any) => prev,
   })
@@ -175,15 +189,15 @@ export default function TicketsPage() {
                       className="rounded border-gray-300 text-sycom-500 cursor-pointer" />
                   </th>
                 )}
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">ID</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Predmet</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Technik</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Stav</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Priorita</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Vytvorené</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Zadal</th>
-                <th className="text-left px-5 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Naposledy upravil</th>
+                <th onClick={()=>toggleSort('ticketNumber')} className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-sycom-500 select-none whitespace-nowrap">ID{sortBy==='ticketNumber'?(sortDir==='asc'?' ↑':' ↓'):''}</th>
+                <th className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Predmet</th>
+                <th className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
+                <th className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Technik</th>
+                <th onClick={()=>toggleSort('status')} className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-sycom-500 select-none whitespace-nowrap">Stav{sortBy==='status'?(sortDir==='asc'?' ↑':' ↓'):''}</th>
+                <th onClick={()=>toggleSort('priority')} className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-sycom-500 select-none whitespace-nowrap">P{sortBy==='priority'?(sortDir==='asc'?' ↑':' ↓'):''}</th>
+                <th onClick={()=>toggleSort('createdAt')} className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-sycom-500 select-none whitespace-nowrap">Vytvorené{sortBy==='createdAt'?(sortDir==='asc'?' ↑':' ↓'):''}</th>
+                <th className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Zadal</th>
+                <th onClick={()=>toggleSort('updatedAt')} className="text-left px-3 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-sycom-500 select-none whitespace-nowrap">Naposledy upravil{sortBy==='updatedAt'?(sortDir==='asc'?' ↑':' ↓'):''}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -199,38 +213,38 @@ export default function TicketsPage() {
                         className="rounded border-gray-300 text-sycom-500 cursor-pointer" />
                     </td>
                   )}
-                  <td className="px-5 py-3.5">
-                    <span className="font-mono text-xs text-sycom-500 font-semibold">#T-{t.ticketNumber}</span>
+                  <td className="px-3 py-3.5">
+                    <span className="font-mono text-[10px] text-sycom-400">#T-{t.ticketNumber}</span>
                   </td>
-                  <td className="px-5 py-3.5 max-w-[280px]">
-                    <Link href={`/tickets/${t.id}`} className="text-sm font-semibold text-gray-800 hover:text-sycom-600 transition-colors truncate block">{t.subject}</Link>
+                  <td className="px-3 py-3.5 max-w-[300px]">
+                    <Link href={`/tickets/${t.id}`} className="text-base font-semibold text-gray-800 hover:text-sycom-600 transition-colors truncate block">{t.subject}</Link>
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-3 py-3.5">
                     {t.client?.name ? (
                       <span className="flex items-center gap-1 text-xs text-gray-600">
                         <Building2 size={12} className="text-gray-400 shrink-0" />{t.client.name}
                       </span>
                     ) : <span className="text-xs text-gray-300">—</span>}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-3 py-3.5">
                     {(t.coAssignees ?? []).length > 0
-                      ? <div className="flex flex-wrap gap-1">{(t.coAssignees ?? []).map((a: any) => <span key={a.userId} className="text-[11px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full whitespace-nowrap">{a.user.name}</span>)}</div>
-                      : t.assignee?.name ? <span className="text-xs text-gray-500">{t.assignee.name}</span>
+                      ? <div className="flex flex-col gap-0.5">{(t.coAssignees ?? []).map((a: any) => { const n=splitName(a.user.name); return <span key={a.userId} className="text-xs text-gray-700 leading-tight"><span className="block">{n.first}</span>{n.last&&<span className="block font-semibold">{n.last}</span>}</span> })}</div>
+                      : t.assignee?.name ? (()=>{const n=splitName(t.assignee.name);return <span className="text-xs text-gray-700 leading-tight"><span className="block">{n.first}</span>{n.last&&<span className="block font-semibold">{n.last}</span>}</span>})()
                       : <span className="text-xs text-gray-300">—</span>}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-3 py-3.5">
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-500'}`}>
                       {statusLabels[t.status] ?? t.status}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-500'}`}>
-                      {priorityLabels[t.priority] ?? t.priority}
+                  <td className="px-3 py-3.5">
+                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-500'}`} title={priorityLabels[t.priority] ?? t.priority}>
+                      {PRIORITY_SHORT[t.priority] ?? t.priority}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-400">{formatDateTime(t.createdAt)}</td>
-                <td className="px-5 py-3.5 text-xs text-gray-500">{t.creator?.name ?? '—'}</td>
-                <td className="px-5 py-3.5">{t.updatedBy ? <div><p className="text-xs text-gray-700 font-medium">{t.updatedBy.name}</p><p className="text-[11px] text-gray-400">{formatDateTime(t.updatedAt)}</p></div> : <span className="text-xs text-gray-300">—</span>}</td>
+                  <td className="px-3 py-3.5 text-xs text-gray-400 whitespace-nowrap">{formatDateTime(t.createdAt)}</td>
+                <td className="px-3 py-3.5">{t.creator?.name?(()=>{const n=splitName(t.creator.name);return <span className="text-xs text-gray-700 leading-tight"><span className="block">{n.first}</span>{n.last&&<span className="block font-semibold">{n.last}</span>}</span>})():<span className="text-xs text-gray-300">—</span>}</td>
+                <td className="px-3 py-3.5">{t.updatedBy ? <div><p className="text-xs text-gray-700 font-medium">{t.updatedBy.name}</p><p className="text-[11px] text-gray-400 whitespace-nowrap">{formatDateTime(t.updatedAt)}</p></div> : <span className="text-xs text-gray-300">—</span>}</td>
                 </tr>
               ))}
             </tbody>
