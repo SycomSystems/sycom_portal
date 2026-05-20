@@ -52,6 +52,9 @@ export default function TicketDetailPage() {
   const [logHoursErr, setLogHoursErr] = useState(false)
   const [logHoursDesc, setLogHoursDesc] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editCommentBody, setEditCommentBody] = useState('')
+  const [savingCommentId, setSavingCommentId] = useState<string | null>(null)
   const [assigneeId, setAssigneeId] = useState('')
   const [newStatus, setNewStatus] = useState('')
   const [editing, setEditing] = useState(false)
@@ -111,6 +114,23 @@ export default function TicketDetailPage() {
     finally { setDeletingId(null) }
   }
 
+  async function handleSaveComment(commentId: string) {
+    if (!editCommentBody.trim()) return
+    setSavingCommentId(commentId)
+    try {
+      const res = await fetch('/api/comments/' + commentId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editCommentBody.trim() }),
+      })
+      if (!res.ok) throw new Error()
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+      queryClient.refetchQueries({ queryKey: ['ticket', id] })
+      toast.success('Komentár upravený')
+      setEditingCommentId(null)
+    } catch { toast.error('Chyba pri úprave') }
+    finally { setSavingCommentId(null) }
+  }
   function startEdit() {
     setEditSubject(ticket.subject)
     setEditDesc(ticket.description)
@@ -400,6 +420,11 @@ export default function TicketDetailPage() {
                         <Lock size={9} /> Interna
                       </span>
                     )}
+                    {(isAdmin || c.author?.id === (session?.user as any)?.id) && editingCommentId !== c.id && (
+                      <button onClick={() => { setEditingCommentId(c.id); setEditCommentBody(c.body) }} className="p-1 text-gray-300 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors">
+                        <Pencil size={13} />
+                      </button>
+                    )}
                     {isAdmin && c.workedHours > 0 && (
                       <button onClick={() => handleDeleteComment(c.id)} disabled={deletingId === c.id} className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                         <Trash2 size={13} />
@@ -407,7 +432,18 @@ export default function TicketDetailPage() {
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
+                {editingCommentId === c.id ? (
+                  <div className="mt-2 space-y-2">
+                    <textarea value={editCommentBody} onChange={e => setEditCommentBody(e.target.value)} rows={3}
+                      className="w-full px-3 py-2 border border-sycom-300 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setEditingCommentId(null)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"><X size={12}/> Zrušiť</button>
+                      <button onClick={() => handleSaveComment(c.id)} disabled={savingCommentId === c.id || !editCommentBody.trim()} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sycom-500 text-white rounded-lg hover:bg-sycom-600 disabled:opacity-50"><Save size={12}/> {savingCommentId === c.id ? 'Ukladám...' : 'Uložiť'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.body}</p>
+                )}
               </div>
             ))}
             <div className="bg-white border border-gray-200 rounded-2xl p-4">
