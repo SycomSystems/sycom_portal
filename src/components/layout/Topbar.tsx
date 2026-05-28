@@ -202,9 +202,11 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
               <Link href="/settings/profile" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-sycom-500 transition-colors">
                 <User size={13} /> Moj profil
               </Link>
-              <Link href="/settings" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-sycom-500 transition-colors">
-                <Settings size={13} /> Nastavenia
-              </Link>
+              {(session?.user as any)?.role === 'ADMIN' && (
+                <Link href="/settings" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-sycom-500 transition-colors">
+                  <Settings size={13} /> Nastavenia
+                </Link>
+              )}
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors"
