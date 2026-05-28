@@ -170,7 +170,7 @@ export default function RecurringReportsPage() {
   async function saveReport(){
     if(!rf.name.trim()||!rf.assignedUserId)return
     setSaving(true)
-    const body={name:rf.name.trim(),hoursType:rf.hoursType,hours:Number(rf.hours),quantity:Number(rf.quantity),unitPrice:Number(rf.unitPrice),note:rf.note||null,isService:rf.isService,assignedUserId:rf.assignedUserId,clientId:rf.clientId||null,scheduleType:rf.scheduleType,intervalDays:rf.scheduleType==='INTERVAL'?Number(rf.intervalDays):null,weekday:rf.scheduleType==='WEEKDAY'?Number(rf.weekday):null,monthDay:rf.scheduleType==='MONTHDAY'?Number(rf.monthDay):null,firstRunAt:rf.firstRunAt||null}
+    const body={name:rf.name.trim(),hoursType:rf.hoursType,hours:rf.isService?0:Number(rf.hours),quantity:Number(rf.quantity),unitPrice:Number(rf.unitPrice),note:rf.note||null,isService:rf.isService,assignedUserId:rf.assignedUserId,clientId:rf.clientId||null,scheduleType:rf.scheduleType,intervalDays:rf.scheduleType==='INTERVAL'?Number(rf.intervalDays):null,weekday:rf.scheduleType==='WEEKDAY'?Number(rf.weekday):null,monthDay:rf.scheduleType==='MONTHDAY'?Number(rf.monthDay):null,firstRunAt:rf.firstRunAt||null}
     await fetch(editRId?`/api/admin/recurring-reports/${editRId}`:'/api/admin/recurring-reports',{method:editRId?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     setSaving(false);setShowRM(false);load()
   }
@@ -313,7 +313,7 @@ export default function RecurringReportsPage() {
                       </td>
                       <td className={`${tdCls} text-gray-600`}>{r.client?.name??'—'}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.user.name}</td>
-                      <td className={`${tdCls} text-gray-600`}>{r.hours}h{!r.isService&&<span className="ml-1 text-xs text-gray-400">({HOURS_TYPES.find(t=>t.value===r.hoursType)?.label??r.hoursType})</span>}</td>
+                      <td className={`${tdCls} text-gray-600`}>{r.isService?'—':`${r.hours}h`}{!r.isService&&<span className="ml-1 text-xs text-gray-400">({HOURS_TYPES.find(t=>t.value===r.hoursType)?.label??r.hoursType})</span>}</td>
                       <td className={`${tdCls} text-gray-600`}>{r.isService?`${r.quantity}× ${r.unitPrice.toFixed(2)}€`:'—'}</td>
                       <td className={`${tdCls} font-medium text-gray-800`}>{r.isService?(r.quantity*r.unitPrice).toFixed(2)+'€':'—'}</td>
                       <td className={tdCls}>
@@ -420,18 +420,18 @@ export default function RecurringReportsPage() {
                   {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              {!rf.isService&&<div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Hodiny *</label>
                   <input type="number" min="0.25" step="0.25" value={rf.hours} onChange={e=>setRf(f=>({...f,hours:parseFloat(e.target.value)||1}))} className={inputCls}/>
                 </div>
-                {!rf.isService&&<div>
+                <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Typ hodín</label>
                   <select value={rf.hoursType} onChange={e=>setRf(f=>({...f,hoursType:e.target.value}))} className={inputCls}>
                     {HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
-                </div>}
-              </div>
+                </div>
+              </div>}
               {rf.isService&&<div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Počet</label>
