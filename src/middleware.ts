@@ -36,6 +36,9 @@ export default withAuth(
     const agentAllowed = ['/admin/sklad', '/admin/reports']
     const isAgentAllowed = agentAllowed.some(p => pathname === p || pathname.startsWith(p + '/'))
 
+    if (pathname.startsWith('/settings') && pathname !== '/settings/profile' && role !== 'ADMIN') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
     if (pathname.startsWith('/admin') && role !== 'ADMIN' && !isAgentAllowed) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }

@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
       }
     }
     // Email adminovi (notifikacia o novom tikete)
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', notifyAll: true }, select: { id: true, email: true, name: true } })
     for (const admin of admins) {
       if (admin.email && admin.id !== userId) {
         sendTicketCreated(admin.email, {

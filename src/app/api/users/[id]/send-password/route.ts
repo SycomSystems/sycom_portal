@@ -6,6 +6,17 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
+import fs from 'fs'
+import path from 'path'
+function logSmtp(entry: Record<string, unknown>) {
+  try {
+    const logDir = '/opt/sycom-portal/logs'
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+    const month = new Date().toISOString().slice(0, 7)
+    const logFile = path.join(logDir, 'smtp-' + month + '.jsonl')
+    fs.appendFileSync(logFile, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n')
+  } catch {}
+}
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -46,5 +57,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     `,
   })
 
+  logSmtp({ type: 'send_password', to: user.email, ok: true })
   return NextResponse.json({ success: true, email: user.email })
 }

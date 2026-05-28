@@ -34,3 +34,35 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 }
+
+export async function PATCH(req: NextRequest) {
+  const session = await getMobileSession()
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+
+  // Zmena mena
+  if (body.name !== undefined) {
+    if (!body.name.trim()) return NextResponse.json({ error: 'Meno nesmie byť prázdne.' }, { status: 400 })
+    const updated = await prisma.user.update({
+      where: { email: session.user.email },
+      data: { name: body.name.trim() },
+      select: { id: true, name: true, email: true, role: true },
+    })
+    return NextResponse.json(updated)
+  }
+
+  // Zmena hesla
+  if (body.oldPassword !== undefined && body.password !== undefined) {
+    const bcrypt = await import('bcryptjs')
+    const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true, password: true } })
+    if (!user?.password) return NextResponse.json({ error: 'Používateľ nemá nastavené heslo.' }, { status: 400 })
+    const valid = await bcrypt.compare(body.oldPassword, user.password)
+    if (!valid) return NextResponse.json({ error: 'Aktuálne heslo je nesprávne.' }, { status: 400 })
+    const hashed = await bcrypt.hash(body.password, 10)
+    await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
+    return NextResponse.json({ ok: true })
+  }
+
+  return NextResponse.json({ error: 'Neplatná požiadavka.' }, { status: 400 })
+}
