@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     invoice_imap_port:              s['invoice_imap_port']              || '993',
     invoice_imap_user:              s['invoice_imap_user']              || '',
     invoice_imap_pass:              s['invoice_imap_pass'] ? MASKED : '',
-    invoice_imap_mailbox:           s['invoice_imap_mailbox']           || 'INBOX',
+    invoice_imap_mailbox: s['invoice_imap_mailbox'] || 'INBOX/Faktury',
     invoice_imap_enabled:           s['invoice_imap_enabled']           || 'false',
     openai_api_key:                 s['openai_api_key'] ? MASKED : '',
     openai_credit_threshold:        s['openai_credit_threshold']        || '',

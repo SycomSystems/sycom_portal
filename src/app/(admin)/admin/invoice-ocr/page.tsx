@@ -40,7 +40,7 @@ function fmtDt(iso: string) {
 function SettingsTab() {
   const [form, setForm] = useState<InvoiceSettings>({
     invoice_imap_host: '', invoice_imap_port: '993', invoice_imap_user: '',
-    invoice_imap_pass: '', invoice_imap_mailbox: 'INBOX', invoice_imap_enabled: 'false',
+    invoice_imap_pass: '', invoice_imap_mailbox: 'INBOX/Faktury', invoice_imap_enabled: 'false',
     openai_api_key: '', openai_credit_threshold: '', openai_credit_notify_users: '',
   })
   const [showImapPass, setShowImapPass] = useState(false)
@@ -96,7 +96,7 @@ function SettingsTab() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Schránka</label>
-            <input className="w-full border rounded px-3 py-2 text-sm" placeholder="INBOX" value={form.invoice_imap_mailbox} onChange={set('invoice_imap_mailbox')} />
+            <input className="w-full border rounded px-3 py-2 text-sm" placeholder="INBOX/Faktury" value={form.invoice_imap_mailbox} onChange={set('invoice_imap_mailbox')} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Používateľ</label>

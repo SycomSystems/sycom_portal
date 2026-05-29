@@ -1,16 +1,23 @@
 /**
  * invoice-poller.js
- * PM2 process — every 5 minutes:
- *   1. Reads invoice_imap_* settings from DB
- *   2. Connects via IMAP, fetches UNSEEN emails with PDF attachments
- *   3. Extracts text via pdf-parse
- *   4. Parses with regex; falls back to GPT-4o-mini if incomplete
- *   5. Duplicate check (variable_symbol + total_amount + supplier)
- *   6. Saves InvoiceOcrResult, ReceivedInvoiceLog, AiApiLog
- *   7. If dodavatel: creates StockMovement(BUY) + StockItem if needed
+ * PM2 process — každých 5 minút:
+ *   1. Načíta invoice_imap_* nastavenia z DB
+ *   2. Pripojí sa na IMAP, stiahne UNSEEN emaily s PDF prílohami
+ *   3. Extrahuje text cez pdf-parse@1.1.1
+ *   4. Parsuje regex; fallback na GPT-4o-mini
+ *   5. Duplicate check (variableSymbol + totalAmount + supplier)
+ *   6. Uloží InvoiceOcrResult, ReceivedInvoiceLog, AiApiLog
+ *   7. Ak dodavatel → StockMovement(BUY) + StockItem ak neexistuje
  *
- * Start:
- *   pm2 start scripts/invoice-poller.js --name invoice-poller
+ * DÔLEŽITÉ — koexistencia s email-pollerom:
+ *   email-poller.js číta z INBOX a vytvára tikety zo VŠETKÝCH emailov.
+ *   invoice-poller číta z INÉHO priečinka (invoice_imap_mailbox, default: INBOX/Faktury).
+ *   Na mail serveri (mail.sycom.sk) treba vytvoriť pravidlo:
+ *     "Ak príloha je PDF a odosielateľ je dodávateľ → presunúť do INBOX/Faktury"
+ *   Tak email-poller nevytvorí tiket z faktúry a invoice-poller ju spracuje.
+ *
+ * Spustenie:
+ *   pm2 start scripts/invoice-poller.js --name invoice-poller --cwd /opt/sycom-portal
  *   pm2 save
  */
 
@@ -19,22 +26,24 @@
 const { ImapFlow }     = require('imapflow')
 const { simpleParser } = require('mailparser')
 const { PrismaClient } = require('@prisma/client')
-const pdfParse         = require('pdf-parse')
+const pdfParse         = require('pdf-parse')  // musí byť verzia 1.1.1 (nie 2.x)
 const fs               = require('fs')
 const path             = require('path')
 
 const prisma        = new PrismaClient()
 const POLL_INTERVAL = 5 * 60 * 1000
-const LOG_DIR       = '/opt/sycom-portal/logs'
 const PRICE_IN      = 0.15 / 1_000_000
 const PRICE_OUT     = 0.60 / 1_000_000
+
+// Log do rovnakého adresára ako ostatné pollery
+const LOG_DIR = process.env.LOG_DIR || path.join(__dirname, '..', 'logs')
 
 // ── Logging ────────────────────────────────────────────────────────────────────
 function log(level, msg) {
   const ts    = new Date().toISOString()
   const entry = JSON.stringify({ ts, level, msg })
-  if (level === 'error') console.error(msg)
-  else console.log(msg)
+  if (level === 'error') console.error(`[invoice] ${msg}`)
+  else console.log(`[invoice] ${msg}`)
   try {
     if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
     const month = ts.slice(0, 7)
@@ -47,6 +56,7 @@ async function loadSettings() {
   const keys = [
     'invoice_imap_host', 'invoice_imap_port', 'invoice_imap_user',
     'invoice_imap_pass', 'invoice_imap_mailbox', 'invoice_imap_enabled',
+    'invoice_imap_secure',
     'openai_api_key', 'openai_credit_threshold', 'openai_credit_notify_users',
     'company_ico', 'company_name',
   ]
@@ -62,7 +72,7 @@ async function extractText(buffer) {
     const data = await pdfParse(buffer)
     return data.text || ''
   } catch (e) {
-    log('warn', `[invoice] pdf-parse error: ${e.message}`)
+    log('warn', `pdf-parse chyba: ${e.message}`)
     return ''
   }
 }
@@ -130,22 +140,30 @@ async function parseOpenAI(text, apiKey) {
     text.slice(0, 4000),
   ].join('\n')
 
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }],
-    }),
-    signal: AbortSignal.timeout(30000),
-  })
+  const controller = new AbortController()
+  const timeout    = setTimeout(() => controller.abort(), 30000)
 
-  const data = await resp.json()
+  let resp
+  try {
+    resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:           'gpt-4o-mini',
+        temperature:     0,
+        response_format: { type: 'json_object' },
+        messages:        [{ role: 'user', content: prompt }],
+      }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  const data    = await resp.json()
   const usage   = data.usage || {}
-  const pt      = usage.prompt_tokens || 0
-  const ct      = usage.completion_tokens || 0
+  const pt      = usage.prompt_tokens      || 0
+  const ct      = usage.completion_tokens  || 0
   const costUsd = pt * PRICE_IN + ct * PRICE_OUT
   const content = data.choices?.[0]?.message?.content || '{}'
   const parsed  = JSON.parse(content)
@@ -162,9 +180,9 @@ async function parseOpenAI(text, apiKey) {
 function detectDirection(parsed, companyIco, companyName) {
   const supplierIco  = (parsed.supplierIco  || '').trim()
   const supplierName = (parsed.supplierName || '').toLowerCase()
-  if (companyIco  && companyIco === supplierIco)                 return 'odberatel'
-  if (companyIco  && supplierName.includes(companyIco))          return 'odberatel'
-  if (companyName && supplierName.includes(companyName.toLowerCase())) return 'odberatel'
+  if (companyIco  && companyIco === supplierIco)                        return 'odberatel'
+  if (companyIco  && supplierName.includes(companyIco))                 return 'odberatel'
+  if (companyName && supplierName.includes(companyName.toLowerCase()))  return 'odberatel'
   return 'dodavatel'
 }
 
@@ -174,25 +192,21 @@ async function findDuplicate(parsed, excludeId) {
   const amount = parsed.totalAmount
   if (!vs || amount == null) return null
 
-  const where = {
-    variableSymbol: vs,
-    totalAmount: amount,
-    isDuplicate: false,
-  }
-  if (excludeId) where.id = { not: excludeId }
+  const baseWhere = { variableSymbol: vs, totalAmount: amount, isDuplicate: false }
+  if (excludeId) baseWhere.id = { not: excludeId }
 
   const supplierIco  = (parsed.supplierIco  || '').trim()
   const supplierName = (parsed.supplierName || '').trim()
 
   if (supplierIco) {
-    const byIco = await prisma.invoiceOcrResult.findFirst({ where: { ...where, supplierIco } })
-    if (byIco) return byIco
+    const hit = await prisma.invoiceOcrResult.findFirst({ where: { ...baseWhere, supplierIco } })
+    if (hit) return hit
   }
   if (supplierName) {
-    const byName = await prisma.invoiceOcrResult.findFirst({
-      where: { ...where, supplierName: { equals: supplierName, mode: 'insensitive' } },
+    const hit = await prisma.invoiceOcrResult.findFirst({
+      where: { ...baseWhere, supplierName: { equals: supplierName, mode: 'insensitive' } },
     })
-    if (byName) return byName
+    if (hit) return hit
   }
   return null
 }
@@ -220,19 +234,17 @@ async function addItemsToStock(ocr, adminId) {
     if (!name) continue
     const qty = parseFloat(item.qty) || 0
     if (qty <= 0) continue
-    const unitRaw  = (item.unit || 'ks').toLowerCase().trim()
-    const unit     = UNIT_MAP[unitRaw] || 'ks'
-    const price    = parseFloat(item.unit_price) || 0
+    const unit  = UNIT_MAP[(item.unit || 'ks').toLowerCase().trim()] || 'ks'
+    const price = parseFloat(item.unit_price) || 0
 
     let stockItem = await prisma.stockItem.findFirst({
       where: { name: { equals: name, mode: 'insensitive' } },
     })
-
     if (!stockItem) {
       stockItem = await prisma.stockItem.create({
         data: { name, unit, lastPurchasePrice: price, avgPurchasePrice: price },
       })
-      log('info', `[invoice] Created StockItem: ${name}`)
+      log('info', `Vytvorený StockItem: ${name}`)
     }
 
     await prisma.stockMovement.create({
@@ -253,7 +265,7 @@ async function addItemsToStock(ocr, adminId) {
       where: { id: stockItem.id },
       data: {
         currentStock:      { increment: qty },
-        lastPurchasePrice: price > 0 ? price : undefined,
+        ...(price > 0 ? { lastPurchasePrice: price } : {}),
       },
     })
     added++
@@ -261,121 +273,100 @@ async function addItemsToStock(ocr, adminId) {
   return added
 }
 
-// ── Process single email ───────────────────────────────────────────────────────
-async function processInvoiceEmail(msg, settings) {
-  const parsed  = await simpleParser(msg.source)
-  const sender  = (() => {
-    const raw = parsed.from?.value
-    const v   = Array.isArray(raw) ? raw[0] : raw
-    return v?.address?.toLowerCase().trim() || null
-  })()
+// ── Process single PDF attachment ──────────────────────────────────────────────
+async function processPdfAttachment(att, senderEmail, subject, settings) {
+  const adminUser = await prisma.user.findFirst({
+    where: { role: 'ADMIN', isActive: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const adminId = adminUser?.id
 
-  const subject = (parsed.subject || '').trim()
+  const receivedLog = await prisma.receivedInvoiceLog.create({
+    data: { fromEmail: senderEmail || '', subject: (subject || '').slice(0, 255), filename: att.filename, status: 'processing' },
+  })
 
-  // Only process emails with PDF attachments
-  const pdfs = (parsed.attachments || []).filter(
-    a => a.contentType === 'application/pdf' || (a.filename || '').toLowerCase().endsWith('.pdf')
-  )
-  if (pdfs.length === 0) return
+  try {
+    const text   = await extractText(att.content)
+    let pdata    = parseRegex(text)
+    let method   = 'regex'
+    let aiLogId  = null
 
-  log('info', `[invoice] Processing "${subject}" from ${sender} — ${pdfs.length} PDF(s)`)
+    if (!pdata._complete) {
+      const openaiKey = settings['openai_api_key']
+      if (!openaiKey) {
+        log('warn', 'OpenAI kľúč nie je nastavený — zostávam pri regex výsledku')
+      } else {
+        try {
+          const ai    = await parseOpenAI(text, openaiKey)
+          const aiLog = await prisma.aiApiLog.create({
+            data: {
+              model: 'gpt-4o-mini',
+              promptTokens:     ai.promptTokens,
+              completionTokens: ai.completionTokens,
+              costUsd:          ai.costUsd,
+              requestPreview:   ai.requestPreview,
+              responsePreview:  ai.responsePreview,
+            },
+          })
+          aiLogId = aiLog.id
+          pdata   = ai.parsed
+          method  = 'openai'
+        } catch (e) {
+          log('error', `OpenAI call zlyhal: ${e.message}`)
+          await prisma.aiApiLog.create({ data: { model: 'gpt-4o-mini', error: String(e.message).slice(0, 500) } })
+        }
+      }
+    }
 
-  const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' } })
-  const adminId   = adminUser?.id
+    const direction   = detectDirection(pdata, settings['company_ico'] || '', settings['company_name'] || '')
+    const duplicate   = await findDuplicate(pdata, null)
+    const isDuplicate = !!duplicate
 
-  for (const att of pdfs) {
-    const receivedLog = await prisma.receivedInvoiceLog.create({
-      data: { fromEmail: sender || '', subject: subject.slice(0, 255), filename: att.filename, status: 'processing' },
+    const ocrResult = await prisma.invoiceOcrResult.create({
+      data: {
+        direction,
+        supplierName:      pdata.supplierName   || null,
+        supplierIco:       pdata.supplierIco    || null,
+        customerName:      pdata.customerName   || null,
+        customerIco:       pdata.customerIco    || null,
+        invoiceNumber:     pdata.invoiceNumber  || null,
+        variableSymbol:    pdata.variableSymbol || null,
+        totalAmount:       pdata.totalAmount    ?? null,
+        dueDate:           pdata.dueDate        || null,
+        items:             pdata.items?.length  ? JSON.stringify(pdata.items) : null,
+        sourceEmail:       senderEmail,
+        filename:          att.filename,
+        recognitionMethod: method,
+        error:             pdata.error          || null,
+        isDuplicate,
+        duplicateOfId:     duplicate?.id        || null,
+      },
     })
 
-    let ocrResult = null
-    try {
-      const text    = await extractText(att.content)
-      let   pdata   = parseRegex(text)
-      let   method  = 'regex'
-      let   aiLogId = null
-
-      if (!pdata._complete) {
-        const openaiKey = settings['openai_api_key']
-        if (!openaiKey) {
-          log('warn', '[invoice] OpenAI kľúč nie je nastavený — zostávam pri regex výsledku')
-        } else {
-          try {
-            const aiResult = await parseOpenAI(text, openaiKey)
-            // Ulož AI log bez OCR FK (nastavíme po flush)
-            const aiLog = await prisma.aiApiLog.create({
-              data: {
-                model: 'gpt-4o-mini',
-                promptTokens:    aiResult.promptTokens,
-                completionTokens: aiResult.completionTokens,
-                costUsd:         aiResult.costUsd,
-                requestPreview:  aiResult.requestPreview,
-                responsePreview: aiResult.responsePreview,
-              },
-            })
-            aiLogId = aiLog.id
-            pdata  = aiResult.parsed
-            method = 'openai'
-          } catch (e) {
-            log('error', `[invoice] OpenAI call failed: ${e.message}`)
-            await prisma.aiApiLog.create({
-              data: { model: 'gpt-4o-mini', error: String(e.message).slice(0, 500) },
-            })
-          }
-        }
-      }
-
-      const direction  = detectDirection(pdata, settings['company_ico'] || '', settings['company_name'] || '')
-      const duplicate  = await findDuplicate(pdata, null)
-      const isDuplicate = !!duplicate
-
-      ocrResult = await prisma.invoiceOcrResult.create({
-        data: {
-          direction,
-          supplierName:      pdata.supplierName   || null,
-          supplierIco:       pdata.supplierIco    || null,
-          customerName:      pdata.customerName   || null,
-          customerIco:       pdata.customerIco    || null,
-          invoiceNumber:     pdata.invoiceNumber  || null,
-          variableSymbol:    pdata.variableSymbol || null,
-          totalAmount:       pdata.totalAmount    ?? null,
-          dueDate:           pdata.dueDate        || null,
-          items:             pdata.items?.length ? JSON.stringify(pdata.items) : null,
-          sourceEmail:       sender,
-          filename:          att.filename,
-          recognitionMethod: method,
-          error:             pdata.error || null,
-          isDuplicate,
-          duplicateOfId:     duplicate?.id || null,
-        },
-      })
-
-      // Aktualizuj FK na AI log
-      if (aiLogId) {
-        await prisma.aiApiLog.update({ where: { id: aiLogId }, data: { invoiceOcrResultId: ocrResult.id } })
-      }
-
-      if (isDuplicate) {
-        log('warn', `[invoice] Duplicitná faktúra: VS=${pdata.variableSymbol} suma=${pdata.totalAmount} (originál: ${duplicate.id})`)
-      } else {
-        if (direction === 'dodavatel' && !pdata.error && adminId) {
-          const added = await addItemsToStock(ocrResult, adminId)
-          if (added) log('info', `[invoice] Pridaných ${added} skladových pohybov`)
-        }
-      }
-
-      await prisma.receivedInvoiceLog.update({
-        where: { id: receivedLog.id },
-        data: { status: pdata.error ? 'error' : 'processed', error: pdata.error || null, invoiceOcrResultId: ocrResult.id },
-      })
-
-    } catch (e) {
-      log('error', `[invoice] Chyba spracovania ${att.filename}: ${e.message}`)
-      await prisma.receivedInvoiceLog.update({
-        where: { id: receivedLog.id },
-        data: { status: 'error', error: String(e.message).slice(0, 500) },
-      })
+    if (aiLogId) {
+      await prisma.aiApiLog.update({ where: { id: aiLogId }, data: { invoiceOcrResultId: ocrResult.id } })
     }
+
+    if (isDuplicate) {
+      log('warn', `Duplicitná faktúra: VS=${pdata.variableSymbol} suma=${pdata.totalAmount} (originál: ${duplicate.id})`)
+    } else if (direction === 'dodavatel' && !pdata.error && adminId) {
+      const added = await addItemsToStock(ocrResult, adminId)
+      if (added) log('info', `Pridaných ${added} skladových pohybov`)
+    }
+
+    await prisma.receivedInvoiceLog.update({
+      where: { id: receivedLog.id },
+      data:  { status: pdata.error ? 'error' : 'processed', error: pdata.error || null, invoiceOcrResultId: ocrResult.id },
+    })
+
+    log('info', `Spracovaná faktúra: ${pdata.invoiceNumber || '—'} od ${pdata.supplierName || senderEmail} — ${direction}${isDuplicate ? ' [DUPLIKÁT]' : ''}`)
+
+  } catch (e) {
+    log('error', `Chyba spracovania ${att.filename}: ${e.message}`)
+    await prisma.receivedInvoiceLog.update({
+      where: { id: receivedLog.id },
+      data:  { status: 'error', error: String(e.message).slice(0, 500) },
+    })
   }
 }
 
@@ -384,57 +375,91 @@ async function poll() {
   const settings = await loadSettings()
 
   if (settings['invoice_imap_enabled'] !== 'true') {
-    log('info', '[invoice] Disabled — skipping cycle.')
+    log('info', 'Poller nie je aktivovaný (invoice_imap_enabled != true)')
+    return
+  }
+
+  const host    = settings['invoice_imap_host']
+  const user    = settings['invoice_imap_user']
+  const pass    = settings['invoice_imap_pass']
+  const mailbox = settings['invoice_imap_mailbox'] || 'INBOX/Faktury'
+
+  if (!host || !user || !pass) {
+    log('warn', 'IMAP nie je nakonfigurovaný — chýba host/user/pass')
     return
   }
 
   const imap = new ImapFlow({
-    host:   settings['invoice_imap_host'],
+    host,
     port:   parseInt(settings['invoice_imap_port'] || '993'),
     secure: settings['invoice_imap_secure'] !== 'false',
-    auth: {
-      user: settings['invoice_imap_user'],
-      pass: settings['invoice_imap_pass'],
-    },
+    auth:   { user, pass },
     logger: false,
   })
 
   try {
     await imap.connect()
-    log('info', '[invoice] Connected to IMAP.')
+    log('info', `Pripojený na IMAP ${host}, priečinok: ${mailbox}`)
 
-    const mailbox = settings['invoice_imap_mailbox'] || 'INBOX'
-    const lock    = await imap.getMailboxLock(mailbox)
+    let lock
+    try {
+      lock = await imap.getMailboxLock(mailbox)
+    } catch (e) {
+      // Priečinok neexistuje — informuj užívateľa
+      log('error', `Priečinok "${mailbox}" neexistuje na IMAP serveri. Vytvor ho alebo zmeň nastavenie invoice_imap_mailbox.`)
+      await imap.logout()
+      return
+    }
+
     try {
       const uids = await imap.search({ seen: false })
-      log('info', `[invoice] Found ${uids.length} unseen message(s).`)
+      log('info', `Nové správy: ${uids.length}`)
 
       for await (const msg of imap.fetch(uids, { source: true })) {
         try {
-          await processInvoiceEmail(msg, settings)
+          const parsed = await simpleParser(msg.source)
+          const sender = (() => {
+            const raw = parsed.from?.value
+            const v   = Array.isArray(raw) ? raw[0] : raw
+            return v?.address?.toLowerCase().trim() || null
+          })()
+          const subject = (parsed.subject || '').trim()
+
+          const pdfs = (parsed.attachments || []).filter(
+            a => a.contentType === 'application/pdf' || (a.filename || '').toLowerCase().endsWith('.pdf')
+          )
+
+          if (pdfs.length === 0) {
+            log('info', `Email bez PDF príloh od ${sender} — preskakujem`)
+          } else {
+            log('info', `Spracúvam email od ${sender}: "${subject}" — ${pdfs.length} PDF`)
+            for (const att of pdfs) {
+              await processPdfAttachment(att, sender, subject, settings)
+            }
+          }
+          await imap.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'])
         } catch (e) {
-          log('error', `[invoice] Error: ${e.message}`)
+          log('error', `Chyba spracovania správy: ${e.message}`)
         }
-        await imap.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'])
       }
     } finally {
       lock.release()
     }
 
     await imap.logout()
-    log('info', '[invoice] Disconnected.')
+    log('info', 'Odpojený od IMAP.')
   } catch (e) {
-    log('error', `[invoice] IMAP error: ${e.message}`)
+    log('error', `IMAP chyba: ${e.message}`)
     try { await imap.logout() } catch {}
   }
 }
 
 async function main() {
-  log('info', '[invoice] Starting invoice poller.')
+  log('info', `Invoice poller štartuje. Interval: ${POLL_INTERVAL / 1000}s`)
   await poll()
   setInterval(async () => {
-    try { await poll() } catch (e) { log('error', `[invoice] Unhandled: ${e.message}`) }
+    try { await poll() } catch (e) { log('error', `Unhandled: ${e.message}`) }
   }, POLL_INTERVAL)
 }
 
-main().catch(e => { log('error', `[invoice] Fatal: ${e}`); process.exit(1) })
+main().catch(e => { log('error', `Fatal: ${e}`); process.exit(1) })
