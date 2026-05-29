@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Ticket, BookOpen, Users, BarChart2,
-  Settings, Phone, Building2, Package, FileText, Bug, ClipboardList, ShoppingCart
+  Settings, Phone, Building2, Package, FileText, Bug, ClipboardList, ShoppingCart, Receipt
 } from 'lucide-react'
 
 interface NavItem {
@@ -24,6 +24,7 @@ const navItems: NavItem[] = [
   { href: '/admin/users', label: 'Používatelia', icon: <Users size={16} />, roles: ['ADMIN'] },
   { href: '/admin/clients', label: 'Klienti', icon: <Building2 size={16} />, roles: ['ADMIN'] },
   { href: '/admin/sklad', label: 'Sklad', icon: <Package size={16} />, roles: ['ADMIN', 'AGENT'] },
+  { href: '/faktury', label: 'Faktúry', icon: <Receipt size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/reports/vykaz', label: 'Výkaz', icon: <FileText size={16} />, roles: ['ADMIN', 'AGENT'] },
   { href: '/admin/recurring-reports', label: 'Op. záznamy', icon: <ClipboardList size={16} />, roles: ['ADMIN'] },
   { href: '/admin/reports', label: 'Reporty', icon: <BarChart2 size={16} />, roles: ['ADMIN'] },

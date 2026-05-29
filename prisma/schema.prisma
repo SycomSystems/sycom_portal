@@ -551,6 +551,7 @@ model InvoiceOcrResult {
   recognitionMethod  String?
   error              String?              @db.Text
   isDuplicate        Boolean              @default(false)
+  stockStatus        String               @default("na")  // na | pending | accepted | rejected
   duplicateOfId      String?
   duplicateOf        InvoiceOcrResult?    @relation("DuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates         InvoiceOcrResult[]   @relation("DuplicateOf")
