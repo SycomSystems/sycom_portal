@@ -1,7 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { FileText, RefreshCw, Loader2, CheckCircle, XCircle, Clock, Package, X, Pencil, Save, ExternalLink, Trash2 } from 'lucide-react'
+import {
+  FileText, RefreshCw, Loader2, CheckCircle, XCircle,
+  Clock, Package, X, Pencil, Save, ExternalLink, Trash2
+} from 'lucide-react'
 
 interface Invoice {
   id: string; createdAt: string; direction: string | null
@@ -11,6 +14,7 @@ interface Invoice {
   totalAmount: number | null; dueDate: string | null
   items: string | null; sourceEmail: string | null
   filename: string | null; filePath: string | null
+  extractedText: string | null
   recognitionMethod: string | null; error: string | null
   isDuplicate: boolean; duplicateOfId: string | null; stockStatus: string
 }
@@ -24,17 +28,15 @@ function fmtEur(n: number | null) {
 }
 
 function StockBadge({ status }: { status: string }) {
-  if (status === 'accepted') return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200"><CheckCircle className="w-3 h-3"/>Zaevidované</span>
-  if (status === 'rejected') return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200"><XCircle className="w-3 h-3"/>Preskočené</span>
-  if (status === 'pending')  return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><Clock className="w-3 h-3"/>Čaká</span>
+  if (status === 'accepted') return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200"><CheckCircle className="w-3 h-3" />Zaevidované</span>
+  if (status === 'rejected') return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200"><XCircle className="w-3 h-3" />Preskočené</span>
+  if (status === 'pending')  return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><Clock className="w-3 h-3" />Čaká</span>
   return null
 }
 
 // ── Edit form ──────────────────────────────────────────────────────────────────
 function EditForm({ inv, onSave, onCancel }: {
-  inv: Invoice
-  onSave: (updated: Partial<Invoice>) => void
-  onCancel: () => void
+  inv: Invoice; onSave: (u: Partial<Invoice>) => void; onCancel: () => void
 }) {
   const [form, setForm] = useState({
     direction:      inv.direction      || 'dodavatel',
@@ -57,9 +59,8 @@ function EditForm({ inv, onSave, onCancel }: {
     setSaving(true)
     try {
       const r = await fetch(`/api/faktury/${inv.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, totalAmount: form.totalAmount ? Number(form.totalAmount) : null, stockStatus: form.stockStatus }),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, totalAmount: form.totalAmount ? Number(form.totalAmount) : null }),
       }).then(r => r.json())
       onSave(r)
     } finally { setSaving(false) }
@@ -71,7 +72,7 @@ function EditForm({ inv, onSave, onCancel }: {
   return (
     <div className="space-y-4 pt-3">
       <div className="grid grid-cols-2 gap-4">
-        <div>
+        <div className="col-span-2">
           <label className={lbl}>Smer</label>
           <select value={form.direction} onChange={set('direction')} className={inp}>
             <option value="dodavatel">Dodávateľská (niekto fakturuje nám)</option>
@@ -80,21 +81,37 @@ function EditForm({ inv, onSave, onCancel }: {
         </div>
         <div>
           <label className={lbl}>Číslo faktúry</label>
-          <input className={inp} value={form.invoiceNumber} onChange={set('invoiceNumber')} placeholder="260100057"/>
+          <input className={inp} value={form.invoiceNumber} onChange={set('invoiceNumber')} />
         </div>
         <div>
           <label className={lbl}>Variabilný symbol</label>
-          <input className={inp} value={form.variableSymbol} onChange={set('variableSymbol')}/>
+          <input className={inp} value={form.variableSymbol} onChange={set('variableSymbol')} />
         </div>
         <div>
           <label className={lbl}>Celková suma (€)</label>
-          <input type="number" step="0.01" className={inp} value={form.totalAmount} onChange={set('totalAmount')}/>
+          <input type="number" step="0.01" className={inp} value={form.totalAmount} onChange={set('totalAmount')} />
         </div>
         <div>
           <label className={lbl}>Splatnosť</label>
-          <input className={inp} value={form.dueDate} onChange={set('dueDate')} placeholder="DD.MM.YYYY"/>
+          <input className={inp} value={form.dueDate} onChange={set('dueDate')} placeholder="DD.MM.YYYY" />
         </div>
         <div>
+          <label className={lbl}>Dodávateľ — názov</label>
+          <input className={inp} value={form.supplierName} onChange={set('supplierName')} />
+        </div>
+        <div>
+          <label className={lbl}>Dodávateľ — IČO</label>
+          <input className={inp} value={form.supplierIco} onChange={set('supplierIco')} />
+        </div>
+        <div>
+          <label className={lbl}>Odberateľ — názov</label>
+          <input className={inp} value={form.customerName} onChange={set('customerName')} />
+        </div>
+        <div>
+          <label className={lbl}>Odberateľ — IČO</label>
+          <input className={inp} value={form.customerIco} onChange={set('customerIco')} />
+        </div>
+        <div className="col-span-2">
           <label className={lbl}>Stav skladu</label>
           <select value={form.stockStatus} onChange={set('stockStatus')} className={inp}>
             <option value="na">N/A — nevzťahuje sa</option>
@@ -104,64 +121,60 @@ function EditForm({ inv, onSave, onCancel }: {
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={lbl}>Dodávateľ — názov</label>
-          <input className={inp} value={form.supplierName} onChange={set('supplierName')}/>
-        </div>
-        <div>
-          <label className={lbl}>Dodávateľ — IČO</label>
-          <input className={inp} value={form.supplierIco} onChange={set('supplierIco')} placeholder="12345678"/>
-        </div>
-        <div>
-          <label className={lbl}>Odberateľ — názov</label>
-          <input className={inp} value={form.customerName} onChange={set('customerName')}/>
-        </div>
-        <div>
-          <label className={lbl}>Odberateľ — IČO</label>
-          <input className={inp} value={form.customerIco} onChange={set('customerIco')} placeholder="12345678"/>
-        </div>
-      </div>
       <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-sycom-500 hover:bg-sycom-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Uložiť zmeny
         </button>
-        <button onClick={onCancel} className="flex items-center gap-2 border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
-          <X className="w-4 h-4"/> Zrušiť
+        <button onClick={onCancel}
+          className="flex items-center gap-2 border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
+          <X className="w-4 h-4" /> Zrušiť
         </button>
       </div>
     </div>
   )
 }
 
-// ── Detail modal ───────────────────────────────────────────────────────────────
+// ── Invoice detail modal ───────────────────────────────────────────────────────
 function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoading, onUpdate, onDelete }: {
   inv: Invoice; onClose: () => void
   onAccept: (id: string) => void; onReject: (id: string) => void
   actionLoading: string | null
-  onUpdate: (updated: Invoice) => void
+  onUpdate: (u: Invoice) => void
   onDelete: (id: string) => void
 }) {
-  const [inv, setInv] = useState(initialInv)
-  const [editing, setEditing] = useState(false)
+  const [inv, setInv]                     = useState(initialInv)
+  const [editing, setEditing]             = useState(false)
+  const [reprocessing, setReprocessing]   = useState(false)
+  const [reprocessError, setRepError]     = useState<string | null>(null)
+  const [showText, setShowText]           = useState(false)
 
   const handleSaved = (updated: Partial<Invoice>) => {
-    const merged = { ...inv, ...updated }
-    setInv(merged)
-    onUpdate(merged)
-    setEditing(false)
+    const merged = { ...inv, ...updated } as Invoice
+    setInv(merged); onUpdate(merged); setEditing(false)
+  }
+
+  const handleReprocess = async () => {
+    setReprocessing(true); setRepError(null)
+    try {
+      const r = await fetch(`/api/faktury/${inv.id}/reprocess`, { method: 'POST' }).then(r => r.json())
+      if (r.error) { setRepError(r.error); return }
+      const merged = { ...inv, ...r.updated } as Invoice
+      setInv(merged); onUpdate(merged)
+    } catch (e: any) { setRepError(e.message) }
+    finally { setReprocessing(false) }
   }
 
   let items: any[] = []
-  try { items = inv.items ? JSON.parse(inv.items) : [] } catch {}
+  try { items = inv.items ? JSON.parse(inv.items) : [] } catch { /**/ }
   const isDodavatel = inv.direction === 'dodavatel'
   const isPending   = inv.stockStatus === 'pending'
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+
         {/* Header */}
         <div className={`px-6 py-4 rounded-t-2xl flex items-start justify-between ${isDodavatel ? 'bg-red-50 border-b border-red-200' : 'bg-blue-50 border-b border-blue-200'}`}>
           <div>
@@ -171,37 +184,44 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
               </span>
               {inv.isDuplicate && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 font-semibold">DUPLICITNÁ</span>}
               {inv.recognitionMethod && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{inv.recognitionMethod}</span>}
-              <StockBadge status={inv.stockStatus}/>
+              <StockBadge status={inv.stockStatus} />
             </div>
             <h2 className="text-lg font-bold text-gray-900">
               {isDodavatel ? (inv.supplierName || '—') : (inv.customerName || '—')}
             </h2>
             <p className="text-sm text-gray-500">{fmtDt(inv.createdAt)} · {inv.sourceEmail}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {!editing && (
               <>
                 <button onClick={() => setEditing(true)}
                   className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
-                  <Pencil className="w-3.5 h-3.5"/> Upraviť
+                  <Pencil className="w-3.5 h-3.5" /> Upraviť
                 </button>
-                <button
-                  onClick={() => { if (confirm('Naozaj vymazať túto faktúru?')) onDelete(inv.id) }}
+                <button onClick={() => { if (confirm('Naozaj vymazať túto faktúru?')) onDelete(inv.id) }}
                   className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50">
-                  <Trash2 className="w-3.5 h-3.5"/> Vymazať
+                  <Trash2 className="w-3.5 h-3.5" /> Vymazať
                 </button>
+                {inv.filePath && (
+                  <button onClick={handleReprocess} disabled={reprocessing}
+                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60">
+                    {reprocessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Znovu spracovať
+                  </button>
+                )}
               </>
             )}
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5"/></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5" /></button>
           </div>
         </div>
 
+        {/* Body */}
         <div className="px-6 py-5 space-y-5">
           {editing ? (
-            <EditForm inv={inv} onSave={handleSaved} onCancel={() => setEditing(false)}/>
+            <EditForm inv={inv} onSave={handleSaved} onCancel={() => setEditing(false)} />
           ) : (
             <>
-              {/* Základné údaje */}
+              {/* Fields */}
               <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                 <div><span className="text-gray-500">Číslo faktúry:</span> <span className="font-medium ml-1">{inv.invoiceNumber || '—'}</span></div>
                 <div><span className="text-gray-500">Variabilný symbol:</span> <span className="font-medium ml-1">{inv.variableSymbol || '—'}</span></div>
@@ -211,26 +231,44 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
                 <div><span className="text-gray-500">Odberateľ:</span> <span className="font-medium ml-1">{inv.customerName || '—'}{inv.customerIco ? ` (IČO: ${inv.customerIco})` : ''}</span></div>
                 <div>
                   <span className="text-gray-500">Súbor:</span>{' '}
-                  {inv.filePath ? (
-                    <a href={inv.filePath} target="_blank" rel="noopener noreferrer"
-                      className="font-medium ml-1 text-sycom-600 hover:text-sycom-700 inline-flex items-center gap-1">
-                      {inv.filename || inv.filePath.split('/').pop()}
-                      <ExternalLink className="w-3 h-3"/>
-                    </a>
-                  ) : (
-                    <span className="font-medium ml-1 text-xs text-gray-400">{inv.filename || '—'}</span>
-                  )}
+                  {inv.filePath
+                    ? <a href={inv.filePath} target="_blank" rel="noopener noreferrer" className="font-medium ml-1 text-sycom-600 hover:text-sycom-700 inline-flex items-center gap-1">
+                        {inv.filename || inv.filePath.split('/').pop()}<ExternalLink className="w-3 h-3" />
+                      </a>
+                    : <span className="font-medium ml-1 text-xs text-gray-400">{inv.filename || '—'}</span>
+                  }
                 </div>
               </div>
 
-              {/* Položky */}
+              {reprocessError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{reprocessError}</div>
+              )}
+
+              {(inv.extractedText !== null || inv.filePath) && (
+                <div>
+                  <button onClick={() => setShowText(v => !v)} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                    {showText ? 'Skryť' : 'Zobraziť'} extrahovaný text z PDF
+                  </button>
+                  {showText && (
+                    <pre className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap max-h-48">
+                      {inv.extractedText || '(text ešte nebol extrahovaný — klikni Znovu spracovať)'}
+                    </pre>
+                  )}
+                </div>
+              )}
+
+              {/* Items */}
               {items.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-2">Položky faktúry ({items.length})</h3>
                   <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
-                        <tr>{['Názov','Množstvo','Jednotka','Cena/j','Celkom'].map(h => <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 border-b text-xs">{h}</th>)}</tr>
+                        <tr>
+                          {['Názov','Množstvo','Jednotka','Cena/j','Celkom'].map(h => (
+                            <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 border-b text-xs">{h}</th>
+                          ))}
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {items.map((it: any, i: number) => (
@@ -255,31 +293,31 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
                 </div>
               )}
 
-              {/* Akcie sklad */}
+              {/* Stock actions */}
               {isDodavatel && isPending && (
                 <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
                   {items.length > 0 ? (
                     <>
                       <button onClick={() => onAccept(inv.id)} disabled={!!actionLoading}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                        {actionLoading === inv.id + '-accept' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Package className="w-4 h-4"/>}
+                        {actionLoading === inv.id + '-accept' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
                         Zaevidovať tovar do skladu
                       </button>
                       <button onClick={() => onReject(inv.id)} disabled={!!actionLoading}
                         className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 hover:bg-gray-50">
-                        {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin"/> : <XCircle className="w-4 h-4"/>}
+                        {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                         Nezaevidovať
                       </button>
                     </>
                   ) : (
                     <div className="flex items-center gap-3">
-                    <p className="text-sm text-gray-500 italic">Žiadne položky — nie je čo evidovať.</p>
-                    <button onClick={() => onReject(inv.id)} disabled={!!actionLoading}
-                      className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-60 hover:bg-gray-50">
-                      {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin"/> : <XCircle className="w-4 h-4"/>}
-                      Uzavrieť
-                    </button>
-                  </div>
+                      <p className="text-sm text-gray-500 italic">Žiadne položky — nie je čo evidovať.</p>
+                      <button onClick={() => onReject(inv.id)} disabled={!!actionLoading}
+                        className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-60 hover:bg-gray-50">
+                        {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                        Uzavrieť
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -293,11 +331,11 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function Faktury() {
-  const [invoices, setInvoices]       = useState<Invoice[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [filter, setFilter]           = useState('all')
-  const [selected, setSelected]       = useState<Invoice | null>(null)
-  const [actionLoading, setActionLoad] = useState<string | null>(null)
+  const [invoices, setInvoices]         = useState<Invoice[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [filter, setFilter]             = useState('all')
+  const [selected, setSelected]         = useState<Invoice | null>(null)
+  const [actionLoading, setActionLoad]  = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -310,31 +348,30 @@ export default function Faktury() {
   const handleUpdate = (updated: Invoice) => {
     setInvoices(p => p.map(i => i.id === updated.id ? updated : i))
   }
-
-  const handleAccept = async (id: string) => {
-    setActionLoad(id + '-accept')
-    try {
-      const r = await fetch(`/api/faktury/${id}/accept`, { method: 'POST' }).then(r => r.json())
-      if (r.ok) {
-        setInvoices(p => p.map(i => i.id === id ? { ...i, stockStatus: 'accepted' } : i))
-        if (selected?.id === id) setSelected(p => p ? { ...p, stockStatus: 'accepted' } : p)
-      }
-    } finally { setActionLoad(null) }
-  }
-
   const handleDelete = async (id: string) => {
     await fetch(`/api/faktury/${id}`, { method: 'DELETE' })
     setInvoices(p => p.filter(i => i.id !== id))
     setSelected(null)
   }
-
+  const handleAccept = async (id: string) => {
+    setActionLoad(id + '-accept')
+    try {
+      const r = await fetch(`/api/faktury/${id}/accept`, { method: 'POST' }).then(r => r.json())
+      if (r.ok) {
+        const upd = (p: Invoice) => p.id === id ? { ...p, stockStatus: 'accepted' } : p
+        setInvoices(p => p.map(upd))
+        setSelected(p => p ? upd(p) : p)
+      }
+    } finally { setActionLoad(null) }
+  }
   const handleReject = async (id: string) => {
     setActionLoad(id + '-reject')
     try {
       const r = await fetch(`/api/faktury/${id}/reject`, { method: 'POST' }).then(r => r.json())
       if (r.ok) {
-        setInvoices(p => p.map(i => i.id === id ? { ...i, stockStatus: 'rejected' } : i))
-        if (selected?.id === id) setSelected(p => p ? { ...p, stockStatus: 'rejected' } : p)
+        const upd = (p: Invoice) => p.id === id ? { ...p, stockStatus: 'rejected' } : p
+        setInvoices(p => p.map(upd))
+        setSelected(p => p ? upd(p) : p)
       }
     } finally { setActionLoad(null) }
   }
@@ -346,16 +383,16 @@ export default function Faktury() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-blue-600"/>
+            <FileText className="w-6 h-6 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900">Faktúry</h1>
             {pendingCount > 0 && (
               <span className="bg-amber-100 text-amber-700 border border-amber-200 text-xs font-semibold px-2.5 py-1 rounded-full">
-                {pendingCount} čaká na evidenciu
+                {pendingCount} čaká
               </span>
             )}
           </div>
           <button onClick={load} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 border rounded-lg">
-            <RefreshCw className="w-3.5 h-3.5"/> Obnoviť
+            <RefreshCw className="w-3.5 h-3.5" /> Obnoviť
           </button>
         </div>
 
@@ -374,9 +411,9 @@ export default function Faktury() {
         </div>
 
         {loading
-          ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400"/></div>
+          ? <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
           : invoices.length === 0
-            ? <div className="text-center py-16 text-gray-400"><FileText className="w-10 h-10 mx-auto mb-3 opacity-30"/><p>Žiadne faktúry</p></div>
+            ? <div className="text-center py-16 text-gray-400"><FileText className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Žiadne faktúry</p></div>
             : (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <table className="min-w-full text-sm">
@@ -417,8 +454,8 @@ export default function Faktury() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               {inv.isDuplicate && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">dup</span>}
-                              {inv.error && <XCircle className="w-3.5 h-3.5 text-red-400"/>}
-                              <StockBadge status={inv.stockStatus}/>
+                              {inv.error && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                              <StockBadge status={inv.stockStatus} />
                             </div>
                           </td>
                         </tr>
@@ -438,7 +475,7 @@ export default function Faktury() {
           onAccept={handleAccept}
           onReject={handleReject}
           actionLoading={actionLoading}
-          onUpdate={(updated) => { handleUpdate(updated); setSelected(updated) }}
+          onUpdate={(u) => { handleUpdate(u); setSelected(u) }}
           onDelete={handleDelete}
         />
       )}
