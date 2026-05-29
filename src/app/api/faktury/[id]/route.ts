@@ -26,7 +26,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(variableSymbol !== undefined && { variableSymbol: variableSymbol || null }),
       ...(totalAmount    !== undefined && { totalAmount:    totalAmount != null ? Number(totalAmount) : null }),
       ...(dueDate        !== undefined && { dueDate:        dueDate        || null }),
+      ...(body.stockStatus !== undefined && { stockStatus: body.stockStatus }),
     },
   })
   return NextResponse.json(updated)
+}
+
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session || (session.user as any).role !== 'ADMIN')
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  await prisma.invoiceOcrResult.delete({ where: { id: params.id } })
+  return NextResponse.json({ ok: true })
 }
