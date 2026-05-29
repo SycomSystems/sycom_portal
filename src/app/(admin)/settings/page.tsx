@@ -322,7 +322,7 @@ export default function SettingsPage() {
   }
 
   // --- Tab state ---
-  const [activeTab, setActiveTab] = useState<'general' | 'imap' | 'smtp' | 'domains' | 'ocr' | 'companies'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'imap' | 'smtp' | 'domains' | 'ocr' | 'companies' | 'hints'>('general')
 
   // --- Invoice OCR state ---
   const [ocrEnabled, setOcrEnabled] = useState(false)
@@ -340,12 +340,22 @@ export default function SettingsPage() {
   const [firmLoading, setFirmLoading]   = useState(false)
   const [firmStatus, setFirmStatus]     = useState<{type:'success'|'error';message:string}|null>(null)
 
+  // --- Supplier hints state ---
+  const [hints, setHints]                 = useState<{id:string;supplierName:string;hint:string}[]>([])
+  const [newHintSupplier, setNewHintSupp] = useState('')
+  const [newHintText, setNewHintText]     = useState('')
+  const [hintLoading, setHintLoading]     = useState(false)
+  const [hintStatus, setHintStatus]       = useState<{type:'success'|'error';message:string}|null>(null)
+
   useEffect(() => {
     fetch('/api/admin/invoice-settings').then(r => r.json()).then(d => {
       setOcrEnabled(d.invoice_ocr_enabled === 'true')
     }).catch(() => {})
     fetch('/api/admin/own-companies').then(r => r.json()).then(d => {
       if (Array.isArray(d)) setOwnCompanies(d)
+    }).catch(() => {})
+    fetch('/api/admin/supplier-hints').then(r => r.json()).then(d => {
+      if (Array.isArray(d)) setHints(d)
     }).catch(() => {})
   }, [])
 
@@ -371,6 +381,30 @@ export default function SettingsPage() {
     if (!confirm(`Odstrániť firmu "${name}"?`)) return
     await fetch(`/api/admin/own-companies/${id}`, { method: 'DELETE' })
     setOwnCompanies(p => p.filter(c => c.id !== id))
+  }
+
+  const handleSaveHint = async () => {
+    if (!newHintSupplier.trim() || !newHintText.trim()) {
+      setHintStatus({ type: 'error', message: 'Vyplňte dodávateľa aj poznámku' }); return
+    }
+    setHintLoading(true); setHintStatus(null)
+    try {
+      const r = await fetch('/api/admin/supplier-hints', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ supplierName: newHintSupplier.trim(), hint: newHintText.trim() })
+      }).then(r => r.json())
+      if (r.error) throw new Error(r.error)
+      setHints(p => { const f = p.filter(h => h.id !== r.id); return [...f, r].sort((a,b) => a.supplierName.localeCompare(b.supplierName)) })
+      setNewHintSupp(''); setNewHintText('')
+      setHintStatus({ type: 'success', message: `Hint pre "${r.supplierName}" uložený.` })
+    } catch (e: any) { setHintStatus({ type: 'error', message: e.message }) }
+    finally { setHintLoading(false) }
+  }
+
+  const handleDeleteHint = async (id: string, name: string) => {
+    if (!confirm(`Odstrániť hint pre "${name}"?`)) return
+    await fetch(`/api/admin/supplier-hints/${id}`, { method: 'DELETE' })
+    setHints(p => p.filter(h => h.id !== id))
   }
 
   const handleSaveOcr = async () => {
@@ -406,7 +440,8 @@ export default function SettingsPage() {
     { key: 'smtp',    label: 'SMTP' },
     { key: 'domains', label: 'Domény' },
     { key: 'ocr',     label: 'Invoice OCR', icon: <ScanText size={14} /> },
-    { key: 'companies', label: 'Naše firmy', icon: <Building2 size={14} /> },
+    { key: 'companies', label: 'Naše firmy',    icon: <Building2 size={14} /> },
+    { key: 'hints',     label: 'Hinty pre AI', icon: <ScanText size={14} /> },
   ] as const
 
   return (
@@ -1043,6 +1078,79 @@ export default function SettingsPage() {
                   <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-sm ${firmStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
                     {firmStatus.type === 'success' ? <CheckCircle size={15} className="mt-0.5 shrink-0"/> : <AlertCircle size={15} className="mt-0.5 shrink-0"/>}
                     {firmStatus.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ── Hinty pre AI Tab ── */}
+        {activeTab === 'hints' && (
+          <div className="space-y-5">
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 text-sm text-blue-800">
+              Ak AI opakovane zle rozpoznáva faktúry konkrétneho dodávateľa, pridaj tu poznámku. Táto poznámka sa pridá do promptu pri spracovaní faktúry od tohto dodávateľa.<br/>
+              <strong>Príklad:</strong> „Alza.sk s.r.o.: Celková suma je v riadku 'Cena celkom s DPH'. Číslo faktúry začína VF."
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <ScanText size={16} className="text-sycom-500"/>
+                  Hinty pre AI rozpoznávanie
+                </h2>
+              </div>
+              <div className="p-6 space-y-4">
+                {hints.length > 0 ? (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider w-48">Dodávateľ</th>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Poznámka pre AI</th>
+                          <th className="w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {hints.map(h => (
+                          <tr key={h.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium text-gray-900 align-top">{h.supplierName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{h.hint}</td>
+                            <td className="px-4 py-3 text-right align-top">
+                              <button onClick={() => handleDeleteHint(h.id, h.supplierName)}
+                                className="text-gray-400 hover:text-red-500"><X size={15}/></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                    Zatiaľ žiadne hinty.
+                  </div>
+                )}
+
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <label className={labelClass}>Dodávateľ (presný názov z faktúry)</label>
+                    <input className={inputClass} value={newHintSupplier} onChange={e => setNewHintSupp(e.target.value)}
+                      placeholder="Alza.sk s.r.o."/>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Poznámka pre AI</label>
+                    <textarea className={`${inputClass} h-20 resize-none`} value={newHintText} onChange={e => setNewHintText(e.target.value)}
+                      placeholder="Napr: Celková suma je v riadku 'Cena celkom s DPH'. Číslo faktúry začína VF."/>
+                  </div>
+                  <button onClick={handleSaveHint} disabled={hintLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50">
+                    <Plus size={15}/>{hintLoading ? 'Ukladám...' : 'Pridať / aktualizovať hint'}
+                  </button>
+                </div>
+
+                {hintStatus && (
+                  <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-sm ${hintStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {hintStatus.type === 'success' ? <CheckCircle size={15} className="mt-0.5 shrink-0"/> : <AlertCircle size={15} className="mt-0.5 shrink-0"/>}
+                    {hintStatus.message}
                   </div>
                 )}
               </div>

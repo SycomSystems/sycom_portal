@@ -551,6 +551,7 @@ model InvoiceOcrResult {
   recognitionMethod  String?
   error              String?              @db.Text
   filePath           String?
+  extractedText      String?  @db.Text
   isDuplicate        Boolean              @default(false)
   stockStatus        String               @default("na")  // na | pending | accepted | rejected
   duplicateOfId      String?
@@ -602,4 +603,14 @@ model OwnCompany {
   createdAt DateTime @default(now())
 
   @@map("own_companies")
+}
+
+model SupplierHint {
+  id           String   @id @default(cuid())
+  supplierName String   @unique
+  hint         String   @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("supplier_hints")
 }
