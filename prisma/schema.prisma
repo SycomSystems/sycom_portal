@@ -532,3 +532,63 @@ model TicketAssignee {
   @@id([ticketId, userId])
   @@map("ticket_assignees")
 }
+
+model InvoiceOcrResult {
+  id                 String               @id @default(cuid())
+  createdAt          DateTime             @default(now())
+  direction          String?
+  supplierName       String?
+  supplierIco        String?
+  customerName       String?
+  customerIco        String?
+  invoiceNumber      String?
+  variableSymbol     String?
+  totalAmount        Float?
+  dueDate            String?
+  items              String?              @db.Text
+  sourceEmail        String?
+  filename           String?
+  recognitionMethod  String?
+  error              String?              @db.Text
+  isDuplicate        Boolean              @default(false)
+  duplicateOfId      String?
+  duplicateOf        InvoiceOcrResult?    @relation("DuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates         InvoiceOcrResult[]   @relation("DuplicateOf")
+  receivedLogs       ReceivedInvoiceLog[]
+  aiLogs             AiApiLog[]
+
+  @@index([createdAt])
+  @@map("invoice_ocr_results")
+}
+
+model ReceivedInvoiceLog {
+  id                 String            @id @default(cuid())
+  createdAt          DateTime          @default(now())
+  fromEmail          String
+  subject            String            @default("")
+  filename           String?
+  status             String            @default("processed")
+  error              String?           @db.Text
+  invoiceOcrResultId String?
+  invoiceOcrResult   InvoiceOcrResult? @relation(fields: [invoiceOcrResultId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("received_invoice_logs")
+}
+
+model AiApiLog {
+  id                 String            @id @default(cuid())
+  createdAt          DateTime          @default(now())
+  model              String            @default("gpt-4o-mini")
+  promptTokens       Int?
+  completionTokens   Int?
+  costUsd            Float?
+  requestPreview     String?           @db.Text
+  responsePreview    String?           @db.Text
+  error              String?           @db.Text
+  invoiceOcrResultId String?
+  invoiceOcrResult   InvoiceOcrResult? @relation(fields: [invoiceOcrResultId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("ai_api_logs")
+}
