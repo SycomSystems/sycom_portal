@@ -54,7 +54,7 @@ function InvoiceDetail({ inv, onClose, onAccept, onReject, actionLoading }: {
               {inv.recognitionMethod && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{inv.recognitionMethod}</span>}
               <StockBadge status={inv.stockStatus} />
             </div>
-            <h2 className="text-lg font-bold text-gray-900">{inv.supplierName || inv.customerName || '—'}</h2>
+            <h2 className="text-lg font-bold text-gray-900">{inv.direction === 'odberatel' ? (inv.customerName || inv.supplierName || '—') : (inv.supplierName || inv.customerName || '—')}</h2>
             <p className="text-sm text-gray-500">{fmtDt(inv.createdAt)} · {inv.sourceEmail}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5"/></button>
@@ -252,7 +252,7 @@ export default function Faktury() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900 truncate max-w-[220px]">{inv.supplierName || inv.customerName || '—'}</div>
+                            <div className="font-medium text-gray-900 truncate max-w-[220px]">{inv.direction === 'odberatel' ? (inv.customerName || inv.supplierName || '—') : (inv.supplierName || inv.customerName || '—')}</div>
                             {(inv.supplierIco || inv.customerIco) && (
                               <div className="text-xs text-gray-400">IČO: {inv.supplierIco || inv.customerIco}</div>
                             )}
