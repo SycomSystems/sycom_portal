@@ -225,7 +225,8 @@ export default function Faktury() {
                     <tr>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Dátum</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Smer</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Dodávateľ / Odberateľ</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Dodávateľ</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Odberateľ</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Číslo</th>
                       <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Suma</th>
                       <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Stav</th>
@@ -252,10 +253,12 @@ export default function Faktury() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-medium text-gray-900 truncate max-w-[220px]">{inv.direction === 'odberatel' ? (inv.customerName || inv.supplierName || '—') : (inv.supplierName || inv.customerName || '—')}</div>
-                            {(inv.supplierIco || inv.customerIco) && (
-                              <div className="text-xs text-gray-400">IČO: {inv.supplierIco || inv.customerIco}</div>
-                            )}
+                            <div className="font-medium text-gray-900 truncate max-w-[180px]">{inv.supplierName || '—'}</div>
+                            {inv.supplierIco && <div className="text-xs text-gray-400">IČO: {inv.supplierIco}</div>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900 truncate max-w-[180px]">{inv.customerName || '—'}</div>
+                            {inv.customerIco && <div className="text-xs text-gray-400">IČO: {inv.customerIco}</div>}
                           </td>
                           <td className="px-4 py-3 text-gray-600 text-xs">{inv.invoiceNumber || '—'}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-900">{fmtEur(inv.totalAmount)}</td>
