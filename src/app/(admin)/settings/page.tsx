@@ -5,7 +5,7 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import {
   Upload, CheckCircle, AlertCircle, ImageIcon, Trash2,
   Phone, Save, Mail, Server, Lock, Eye, EyeOff, ToggleLeft, ToggleRight,
-  Shield, Plus, X, Send, Zap,
+  Shield, Plus, X, Send, Zap, ScanText, DollarSign,
 } from 'lucide-react'
 
 type AllowedDomain = { id: string; domain: string; note: string | null; createdAt: string }
@@ -321,17 +321,80 @@ export default function SettingsPage() {
     }
   }
 
+  // --- Tab state ---
+  const [activeTab, setActiveTab] = useState<'general' | 'imap' | 'smtp' | 'domains' | 'ocr'>('general')
+
+  // --- Invoice OCR state ---
+  const [ocrEnabled, setOcrEnabled] = useState(false)
+  const [openaiKey, setOpenaiKey]   = useState('')
+  const [showOaiKey, setShowOaiKey] = useState(false)
+  const [ocrSaving, setOcrSaving]   = useState(false)
+  const [ocrStatus, setOcrStatus]   = useState<{type:'success'|'error';message:string}|null>(null)
+  const [creditInfo, setCreditInfo] = useState<string|null>(null)
+  const [creditLoading, setCreditL] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/invoice-settings').then(r => r.json()).then(d => {
+      setOcrEnabled(d.invoice_ocr_enabled === 'true')
+    }).catch(() => {})
+  }, [])
+
+  const handleSaveOcr = async () => {
+    setOcrSaving(true); setOcrStatus(null)
+    try {
+      const body: any = { invoice_ocr_enabled: String(ocrEnabled) }
+      if (openaiKey && openaiKey !== '••••••••') body.openai_api_key = openaiKey
+      await fetch('/api/admin/invoice-settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      setOcrStatus({ type: 'success', message: 'Nastavenia boli uložené.' })
+      setOpenaiKey('')
+    } catch (e: any) { setOcrStatus({ type: 'error', message: e.message }) }
+    finally { setOcrSaving(false) }
+  }
+
+  const handleCheckCredit = async () => {
+    setCreditL(true); setCreditInfo(null)
+    try {
+      const r = await fetch('/api/admin/openai-credit').then(r => r.json())
+      if (r.error) { setCreditInfo('Chyba: ' + r.error); return }
+      setCreditInfo(r.total_available != null
+        ? '✓ Kľúč platný · $' + Number(r.total_available).toFixed(2) + ' USD'
+        : '✓ Kľúč platný · Zostatok: platform.openai.com/settings/billing')
+    } catch (e: any) { setCreditInfo('Chyba: ' + e.message) }
+    finally { setCreditL(false) }
+  }
+
   const inputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sycom-300 focus:border-sycom-400 transition-colors'
   const labelClass = 'text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block'
 
+  const TABS = [
+    { key: 'general', label: 'Všeobecné' },
+    { key: 'imap',    label: 'Email IMAP' },
+    { key: 'smtp',    label: 'SMTP' },
+    { key: 'domains', label: 'Domény' },
+    { key: 'ocr',     label: 'Invoice OCR', icon: <ScanText size={14} /> },
+  ] as const
+
   return (
     <PortalLayout>
-      <div className="max-w-3xl mx-auto py-8 px-6 space-y-6">
-        <div className="mb-2">
+      <div className="max-w-3xl mx-auto py-8 px-6">
+        <div className="mb-5">
           <h1 className="text-2xl font-bold text-gray-900">Nastavenia</h1>
           <p className="text-sm text-gray-500 mt-1">Prispôsobte vzhľad a správanie portálu</p>
         </div>
 
+        {/* Tab navigation */}
+        <div className="flex gap-1 border-b border-gray-200 mb-6">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key as any)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${ activeTab === t.key ? 'border-sycom-500 text-sycom-600' : 'border-transparent text-gray-500 hover:text-gray-700' }`}>
+              {'icon' in t ? t.icon : null}{t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-6">
+
+        {activeTab === 'general' && (<>
         {/* ── Logo Upload Section ── */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -437,6 +500,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        </>)}
+
+        {activeTab === 'imap' && (<>
         {/* ── Email → Tiket (IMAP) Section ── */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -571,6 +637,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        </>)}
+
+        {activeTab === 'smtp' && (<>
         {/* ── SMTP Server Section ── */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -703,6 +772,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        </>)}
+
+        {activeTab === 'domains' && (<>
         {/* ── Povolené domény Section ── */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -800,6 +872,72 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        </>)}
+
+        {/* ── Invoice OCR Tab ── */}
+        {activeTab === 'ocr' && (
+          <div className="space-y-5">
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 text-sm text-blue-800">
+              Invoice OCR poller skenuje INBOX každých 5 minút, rozoznáva faktúry z PDF príloh a ukladá ich do sekcie <strong>Faktúry</strong>. Sklad sa neplní automaticky — schváliš v sekcii Faktúry.
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    <ScanText size={16} className="text-sycom-500" />
+                    Invoice OCR
+                  </h2>
+                  <button onClick={() => setOcrEnabled(!ocrEnabled)}
+                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${ocrEnabled ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}>
+                    {ocrEnabled ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    {ocrEnabled ? 'Zapnuté' : 'Vypnuté'}
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className={labelClass}><Server size={11} className="inline mr-1"/>OpenAI API kľúč (GPT-4o-mini)</label>
+                  <div className="relative">
+                    <input type={showOaiKey ? 'text' : 'password'} value={openaiKey}
+                      onChange={e => setOpenaiKey(e.target.value)}
+                      placeholder="(nezmenené — zadaj nový kľúč pre zmenu)"
+                      className={`${inputClass} pr-10`} />
+                    <button type="button" onClick={() => setShowOaiKey(!showOaiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showOaiKey ? <EyeOff size={15}/> : <Eye size={15}/>}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button onClick={handleCheckCredit} disabled={creditLoading}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                    <DollarSign size={14}/>
+                    {creditLoading ? 'Kontrolujem...' : 'Overiť kľúč'}
+                  </button>
+                  {creditInfo && <span className="text-sm text-gray-700">{creditInfo}</span>}
+                </div>
+
+                {ocrStatus && (
+                  <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-sm ${ocrStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {ocrStatus.type === 'success' ? <CheckCircle size={15} className="mt-0.5 shrink-0"/> : <AlertCircle size={15} className="mt-0.5 shrink-0"/>}
+                    {ocrStatus.message}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <button onClick={handleSaveOcr} disabled={ocrSaving}
+                    className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
+                    <Save size={15}/>
+                    {ocrSaving ? 'Ukladám...' : 'Uložiť nastavenia'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
       </div>
     </PortalLayout>
   )
