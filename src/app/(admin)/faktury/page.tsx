@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { FileText, RefreshCw, Loader2, CheckCircle, XCircle, Clock, Package, X, Pencil, Save, ExternalLink } from 'lucide-react'
+import { FileText, RefreshCw, Loader2, CheckCircle, XCircle, Clock, Package, X, Pencil, Save, ExternalLink, Trash2 } from 'lucide-react'
 
 interface Invoice {
   id: string; createdAt: string; direction: string | null
@@ -46,6 +46,7 @@ function EditForm({ inv, onSave, onCancel }: {
     variableSymbol: inv.variableSymbol || '',
     totalAmount:    inv.totalAmount != null ? String(inv.totalAmount) : '',
     dueDate:        inv.dueDate        || '',
+    stockStatus:    inv.stockStatus    || 'na',
   })
   const [saving, setSaving] = useState(false)
 
@@ -58,7 +59,7 @@ function EditForm({ inv, onSave, onCancel }: {
       const r = await fetch(`/api/faktury/${inv.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, totalAmount: form.totalAmount ? Number(form.totalAmount) : null }),
+        body: JSON.stringify({ ...form, totalAmount: form.totalAmount ? Number(form.totalAmount) : null, stockStatus: form.stockStatus }),
       }).then(r => r.json())
       onSave(r)
     } finally { setSaving(false) }
@@ -92,6 +93,15 @@ function EditForm({ inv, onSave, onCancel }: {
         <div>
           <label className={lbl}>Splatnosť</label>
           <input className={inp} value={form.dueDate} onChange={set('dueDate')} placeholder="DD.MM.YYYY"/>
+        </div>
+        <div>
+          <label className={lbl}>Stav skladu</label>
+          <select value={form.stockStatus} onChange={set('stockStatus')} className={inp}>
+            <option value="na">N/A — nevzťahuje sa</option>
+            <option value="pending">Čaká na rozhodnutie</option>
+            <option value="accepted">Zaevidované do skladu</option>
+            <option value="rejected">Preskočené</option>
+          </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -127,11 +137,12 @@ function EditForm({ inv, onSave, onCancel }: {
 }
 
 // ── Detail modal ───────────────────────────────────────────────────────────────
-function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoading, onUpdate }: {
+function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoading, onUpdate, onDelete }: {
   inv: Invoice; onClose: () => void
   onAccept: (id: string) => void; onReject: (id: string) => void
   actionLoading: string | null
   onUpdate: (updated: Invoice) => void
+  onDelete: (id: string) => void
 }) {
   const [inv, setInv] = useState(initialInv)
   const [editing, setEditing] = useState(false)
@@ -169,10 +180,17 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
           </div>
           <div className="flex items-center gap-2">
             {!editing && (
-              <button onClick={() => setEditing(true)}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
-                <Pencil className="w-3.5 h-3.5"/> Upraviť
-              </button>
+              <>
+                <button onClick={() => setEditing(true)}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
+                  <Pencil className="w-3.5 h-3.5"/> Upraviť
+                </button>
+                <button
+                  onClick={() => { if (confirm('Naozaj vymazať túto faktúru?')) onDelete(inv.id) }}
+                  className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50">
+                  <Trash2 className="w-3.5 h-3.5"/> Vymazať
+                </button>
+              </>
             )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5"/></button>
           </div>
@@ -254,7 +272,14 @@ function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoa
                       </button>
                     </>
                   ) : (
+                    <div className="flex items-center gap-3">
                     <p className="text-sm text-gray-500 italic">Žiadne položky — nie je čo evidovať.</p>
+                    <button onClick={() => onReject(inv.id)} disabled={!!actionLoading}
+                      className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-60 hover:bg-gray-50">
+                      {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin"/> : <XCircle className="w-4 h-4"/>}
+                      Uzavrieť
+                    </button>
+                  </div>
                   )}
                 </div>
               )}
@@ -295,6 +320,12 @@ export default function Faktury() {
         if (selected?.id === id) setSelected(p => p ? { ...p, stockStatus: 'accepted' } : p)
       }
     } finally { setActionLoad(null) }
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/faktury/${id}`, { method: 'DELETE' })
+    setInvoices(p => p.filter(i => i.id !== id))
+    setSelected(null)
   }
 
   const handleReject = async (id: string) => {
@@ -408,6 +439,7 @@ export default function Faktury() {
           onReject={handleReject}
           actionLoading={actionLoading}
           onUpdate={(updated) => { handleUpdate(updated); setSelected(updated) }}
+          onDelete={handleDelete}
         />
       )}
     </PortalLayout>
