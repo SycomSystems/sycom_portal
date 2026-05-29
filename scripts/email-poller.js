@@ -409,14 +409,14 @@ async function processMessage(imap, msg) {
           data: {
             ticketId: ticket.id,
             filename: att.filename || 'attachment',
-            fileUrl:  `/uploads/attachments/${filename}`,
-            fileSize: att.size ?? att.content.length,
+            url: `/uploads/attachments/${filename}`,
+            size: Math.floor(att.size ?? att.content.length),
             mimeType: att.contentType || 'application/octet-stream',
           },
         })
         log('info', `[poller]   + attachment: ${filename}`)
       } catch (err) {
-        log('error', '[poller] Failed to save attachment:', err.message)
+        log('error', `[poller] Failed to save attachment: ${err?.message ?? err}`)
       }
     }
   }
