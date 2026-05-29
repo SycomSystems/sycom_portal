@@ -593,3 +593,12 @@ model AiApiLog {
   @@index([createdAt])
   @@map("ai_api_logs")
 }
+
+model OwnCompany {
+  id        String   @id @default(cuid())
+  name      String
+  ico       String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("own_companies")
+}

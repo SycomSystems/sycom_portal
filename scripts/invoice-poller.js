@@ -160,13 +160,17 @@ async function parseOpenAI(text, apiKey) {
            requestPreview: prompt.slice(0, 1000), responsePreview: content.slice(0, 1000) }
 }
 
-// ── Direction ──────────────────────────────────────────────────────────────────
-function detectDirection(parsed, companyIco, companyName) {
+// ── Direction — kontroluje proti vlastným firmám v DB ─────────────────────────
+async function detectDirection(parsed) {
   const sIco  = (parsed.supplierIco  || '').trim()
   const sName = (parsed.supplierName || '').toLowerCase()
-  if (companyIco  && companyIco === sIco)                        return 'odberatel'
-  if (companyIco  && sName.includes(companyIco))                 return 'odberatel'
-  if (companyName && sName.includes(companyName.toLowerCase()))  return 'odberatel'
+  if (!sIco && !sName) return 'dodavatel'
+
+  const ownCompanies = await prisma.ownCompany.findMany()
+  for (const c of ownCompanies) {
+    if (sIco && c.ico === sIco)                            return 'odberatel'
+    if (sName && sName.includes(c.name.toLowerCase()))     return 'odberatel'
+  }
   return 'dodavatel'
 }
 
@@ -217,7 +221,7 @@ async function processPdf(att, sender, subject, settings) {
       }
     }
 
-    const direction   = detectDirection(pdata, settings['company_ico'] || '', settings['company_name'] || '')
+    const direction   = await detectDirection(pdata)
     const duplicate   = await findDuplicate(pdata)
     const isDuplicate = !!duplicate
 

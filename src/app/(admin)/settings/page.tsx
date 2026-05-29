@@ -5,7 +5,7 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import {
   Upload, CheckCircle, AlertCircle, ImageIcon, Trash2,
   Phone, Save, Mail, Server, Lock, Eye, EyeOff, ToggleLeft, ToggleRight,
-  Shield, Plus, X, Send, Zap, ScanText, DollarSign,
+  Shield, Plus, X, Send, Zap, ScanText, DollarSign, Building2,
 } from 'lucide-react'
 
 type AllowedDomain = { id: string; domain: string; note: string | null; createdAt: string }
@@ -322,7 +322,7 @@ export default function SettingsPage() {
   }
 
   // --- Tab state ---
-  const [activeTab, setActiveTab] = useState<'general' | 'imap' | 'smtp' | 'domains' | 'ocr'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'imap' | 'smtp' | 'domains' | 'ocr' | 'companies'>('general')
 
   // --- Invoice OCR state ---
   const [ocrEnabled, setOcrEnabled] = useState(false)
@@ -333,11 +333,45 @@ export default function SettingsPage() {
   const [creditInfo, setCreditInfo] = useState<string|null>(null)
   const [creditLoading, setCreditL] = useState(false)
 
+  // --- Naše firmy state ---
+  const [ownCompanies, setOwnCompanies] = useState<{id:string;name:string;ico:string}[]>([])
+  const [newFirmName, setNewFirmName]   = useState('')
+  const [newFirmIco, setNewFirmIco]     = useState('')
+  const [firmLoading, setFirmLoading]   = useState(false)
+  const [firmStatus, setFirmStatus]     = useState<{type:'success'|'error';message:string}|null>(null)
+
   useEffect(() => {
     fetch('/api/admin/invoice-settings').then(r => r.json()).then(d => {
       setOcrEnabled(d.invoice_ocr_enabled === 'true')
     }).catch(() => {})
+    fetch('/api/admin/own-companies').then(r => r.json()).then(d => {
+      if (Array.isArray(d)) setOwnCompanies(d)
+    }).catch(() => {})
   }, [])
+
+  const handleAddFirm = async () => {
+    if (!newFirmName.trim() || !newFirmIco.trim()) {
+      setFirmStatus({ type: 'error', message: 'Vyplňte názov aj IČO' }); return
+    }
+    setFirmLoading(true); setFirmStatus(null)
+    try {
+      const r = await fetch('/api/admin/own-companies', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: newFirmName.trim(), ico: newFirmIco.trim() })
+      }).then(r => r.json())
+      if (r.error) throw new Error(r.error)
+      setOwnCompanies(p => [...p, r].sort((a,b) => a.name.localeCompare(b.name)))
+      setNewFirmName(''); setNewFirmIco('')
+      setFirmStatus({ type: 'success', message: `Firma "${r.name}" pridaná.` })
+    } catch (e: any) { setFirmStatus({ type: 'error', message: e.message }) }
+    finally { setFirmLoading(false) }
+  }
+
+  const handleDeleteFirm = async (id: string, name: string) => {
+    if (!confirm(`Odstrániť firmu "${name}"?`)) return
+    await fetch(`/api/admin/own-companies/${id}`, { method: 'DELETE' })
+    setOwnCompanies(p => p.filter(c => c.id !== id))
+  }
 
   const handleSaveOcr = async () => {
     setOcrSaving(true); setOcrStatus(null)
@@ -372,6 +406,7 @@ export default function SettingsPage() {
     { key: 'smtp',    label: 'SMTP' },
     { key: 'domains', label: 'Domény' },
     { key: 'ocr',     label: 'Invoice OCR', icon: <ScanText size={14} /> },
+    { key: 'companies', label: 'Naše firmy', icon: <Building2 size={14} /> },
   ] as const
 
   return (
@@ -933,6 +968,83 @@ export default function SettingsPage() {
                     {ocrSaving ? 'Ukladám...' : 'Uložiť nastavenia'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ── Naše firmy Tab ── */}
+        {activeTab === 'companies' && (
+          <div className="space-y-5">
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 text-sm text-blue-800">
+              Zoznam vašich vlastných firiem. Systém podľa IČO rozlišuje, či faktúra je <strong>odberateľská</strong> (vaša firma je dodávateľ) alebo <strong>dodávateľská</strong> (niekto fakturuje vám).
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <Building2 size={16} className="text-sycom-500"/>
+                  Naše firmy
+                </h2>
+              </div>
+              <div className="p-6 space-y-4">
+                {ownCompanies.length > 0 ? (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Názov firmy</th>
+                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider w-36">IČO</th>
+                          <th className="w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {ownCompanies.map(c => (
+                          <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
+                            <td className="px-4 py-3 font-mono text-sm text-gray-600">{c.ico}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => handleDeleteFirm(c.id, c.name)}
+                                className="text-gray-400 hover:text-red-500 transition-colors" title="Odstrániť">
+                                <X size={15}/>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                    Zatiaľ žiadne firmy. Pridajte prvú nižšie.
+                  </div>
+                )}
+
+                <div className="flex items-end gap-3 pt-1">
+                  <div className="flex-1">
+                    <label className={labelClass}>Názov firmy</label>
+                    <input type="text" value={newFirmName} onChange={e => setNewFirmName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddFirm()}
+                      placeholder="Sycom Systems s.r.o." className={inputClass}/>
+                  </div>
+                  <div className="w-40">
+                    <label className={labelClass}>IČO</label>
+                    <input type="text" value={newFirmIco} onChange={e => setNewFirmIco(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddFirm()}
+                      placeholder="12345678" className={inputClass}/>
+                  </div>
+                  <button onClick={handleAddFirm} disabled={firmLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors shrink-0">
+                    <Plus size={15}/>
+                    {firmLoading ? 'Pridávam...' : 'Pridať'}
+                  </button>
+                </div>
+
+                {firmStatus && (
+                  <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-sm ${firmStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {firmStatus.type === 'success' ? <CheckCircle size={15} className="mt-0.5 shrink-0"/> : <AlertCircle size={15} className="mt-0.5 shrink-0"/>}
+                    {firmStatus.message}
+                  </div>
+                )}
               </div>
             </div>
           </div>
