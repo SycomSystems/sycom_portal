@@ -26,6 +26,7 @@ const fs               = require('fs')
 const path             = require('path')
 
 const prisma        = new PrismaClient()
+const INVOICES_DIR  = path.join(__dirname, '..', 'public', 'uploads', 'invoices')
 const POLL_INTERVAL = 5 * 60 * 1000
 const PRICE_IN      = 0.15 / 1_000_000
 const PRICE_OUT     = 0.60 / 1_000_000
@@ -42,6 +43,21 @@ function saveProcessed(set) {
   if (arr.length > 10000) arr.splice(0, arr.length - 10000)
   if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
   fs.writeFileSync(PROCESSED_FILE, JSON.stringify(arr))
+}
+
+// ── Save PDF to disk ──────────────────────────────────────────────────────────
+function savePdf(buffer, invoiceNumber, filename) {
+  try {
+    if (!fs.existsSync(INVOICES_DIR)) fs.mkdirSync(INVOICES_DIR, { recursive: true })
+    const ts   = Date.now()
+    const safe = (filename || 'invoice').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const name = `${ts}-${safe}`
+    fs.writeFileSync(path.join(INVOICES_DIR, name), buffer)
+    return `/uploads/invoices/${name}`
+  } catch (e) {
+    log('warn', `Nepodarilo sa uložiť PDF: ${e.message}`)
+    return null
+  }
 }
 
 // ── Logging ────────────────────────────────────────────────────────────────────
@@ -200,6 +216,7 @@ async function processPdf(att, sender, subject, settings) {
   })
 
   try {
+    const filePath = savePdf(att.content, null, att.filename)
     const text  = await extractText(att.content)
     let pdata   = parseRegex(text)
     let method  = 'regex'

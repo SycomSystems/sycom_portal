@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { FileText, RefreshCw, Loader2, ChevronDown, ChevronRight, CheckCircle, XCircle, Clock, Package, X } from 'lucide-react'
+import { FileText, RefreshCw, Loader2, CheckCircle, XCircle, Clock, Package, X, Pencil, Save, ExternalLink } from 'lucide-react'
 
 interface Invoice {
   id: string; createdAt: string; direction: string | null
@@ -9,10 +9,10 @@ interface Invoice {
   customerName: string | null; customerIco: string | null
   invoiceNumber: string | null; variableSymbol: string | null
   totalAmount: number | null; dueDate: string | null
-  items: string | null; sourceEmail: string | null; filename: string | null
+  items: string | null; sourceEmail: string | null
+  filename: string | null; filePath: string | null
   recognitionMethod: string | null; error: string | null
-  isDuplicate: boolean; duplicateOfId: string | null
-  stockStatus: string
+  isDuplicate: boolean; duplicateOfId: string | null; stockStatus: string
 }
 
 function fmtDt(iso: string) {
@@ -30,111 +30,235 @@ function StockBadge({ status }: { status: string }) {
   return null
 }
 
-function InvoiceDetail({ inv, onClose, onAccept, onReject, actionLoading }: {
+// ── Edit form ──────────────────────────────────────────────────────────────────
+function EditForm({ inv, onSave, onCancel }: {
+  inv: Invoice
+  onSave: (updated: Partial<Invoice>) => void
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState({
+    direction:      inv.direction      || 'dodavatel',
+    supplierName:   inv.supplierName   || '',
+    supplierIco:    inv.supplierIco    || '',
+    customerName:   inv.customerName   || '',
+    customerIco:    inv.customerIco    || '',
+    invoiceNumber:  inv.invoiceNumber  || '',
+    variableSymbol: inv.variableSymbol || '',
+    totalAmount:    inv.totalAmount != null ? String(inv.totalAmount) : '',
+    dueDate:        inv.dueDate        || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(p => ({ ...p, [k]: e.target.value }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const r = await fetch(`/api/faktury/${inv.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, totalAmount: form.totalAmount ? Number(form.totalAmount) : null }),
+      }).then(r => r.json())
+      onSave(r)
+    } finally { setSaving(false) }
+  }
+
+  const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-300'
+  const lbl = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1'
+
+  return (
+    <div className="space-y-4 pt-3">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={lbl}>Smer</label>
+          <select value={form.direction} onChange={set('direction')} className={inp}>
+            <option value="dodavatel">Dodávateľská (niekto fakturuje nám)</option>
+            <option value="odberatel">Odberateľská (my fakturujeme)</option>
+          </select>
+        </div>
+        <div>
+          <label className={lbl}>Číslo faktúry</label>
+          <input className={inp} value={form.invoiceNumber} onChange={set('invoiceNumber')} placeholder="260100057"/>
+        </div>
+        <div>
+          <label className={lbl}>Variabilný symbol</label>
+          <input className={inp} value={form.variableSymbol} onChange={set('variableSymbol')}/>
+        </div>
+        <div>
+          <label className={lbl}>Celková suma (€)</label>
+          <input type="number" step="0.01" className={inp} value={form.totalAmount} onChange={set('totalAmount')}/>
+        </div>
+        <div>
+          <label className={lbl}>Splatnosť</label>
+          <input className={inp} value={form.dueDate} onChange={set('dueDate')} placeholder="DD.MM.YYYY"/>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={lbl}>Dodávateľ — názov</label>
+          <input className={inp} value={form.supplierName} onChange={set('supplierName')}/>
+        </div>
+        <div>
+          <label className={lbl}>Dodávateľ — IČO</label>
+          <input className={inp} value={form.supplierIco} onChange={set('supplierIco')} placeholder="12345678"/>
+        </div>
+        <div>
+          <label className={lbl}>Odberateľ — názov</label>
+          <input className={inp} value={form.customerName} onChange={set('customerName')}/>
+        </div>
+        <div>
+          <label className={lbl}>Odberateľ — IČO</label>
+          <input className={inp} value={form.customerIco} onChange={set('customerIco')} placeholder="12345678"/>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 bg-sycom-500 hover:bg-sycom-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+          Uložiť zmeny
+        </button>
+        <button onClick={onCancel} className="flex items-center gap-2 border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
+          <X className="w-4 h-4"/> Zrušiť
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Detail modal ───────────────────────────────────────────────────────────────
+function InvoiceDetail({ inv: initialInv, onClose, onAccept, onReject, actionLoading, onUpdate }: {
   inv: Invoice; onClose: () => void
   onAccept: (id: string) => void; onReject: (id: string) => void
   actionLoading: string | null
+  onUpdate: (updated: Invoice) => void
 }) {
+  const [inv, setInv] = useState(initialInv)
+  const [editing, setEditing] = useState(false)
+
+  const handleSaved = (updated: Partial<Invoice>) => {
+    const merged = { ...inv, ...updated }
+    setInv(merged)
+    onUpdate(merged)
+    setEditing(false)
+  }
+
   let items: any[] = []
   try { items = inv.items ? JSON.parse(inv.items) : [] } catch {}
   const isDodavatel = inv.direction === 'dodavatel'
   const isPending   = inv.stockStatus === 'pending'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-12 px-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className={`px-6 py-4 rounded-t-2xl flex items-start justify-between ${isDodavatel ? 'bg-red-50 border-b border-red-200' : 'bg-blue-50 border-b border-blue-200'}`}>
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isDodavatel ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
                 {isDodavatel ? 'Dodávateľská' : 'Odberateľská'}
               </span>
               {inv.isDuplicate && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 font-semibold">DUPLICITNÁ</span>}
               {inv.recognitionMethod && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{inv.recognitionMethod}</span>}
-              <StockBadge status={inv.stockStatus} />
+              <StockBadge status={inv.stockStatus}/>
             </div>
-            <h2 className="text-lg font-bold text-gray-900">{inv.direction === 'odberatel' ? (inv.customerName || inv.supplierName || '—') : (inv.supplierName || inv.customerName || '—')}</h2>
+            <h2 className="text-lg font-bold text-gray-900">
+              {isDodavatel ? (inv.supplierName || '—') : (inv.customerName || '—')}
+            </h2>
             <p className="text-sm text-gray-500">{fmtDt(inv.createdAt)} · {inv.sourceEmail}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5"/></button>
+          <div className="flex items-center gap-2">
+            {!editing && (
+              <button onClick={() => setEditing(true)}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
+                <Pencil className="w-3.5 h-3.5"/> Upraviť
+              </button>
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5"/></button>
+          </div>
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          {/* Základné údaje */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-            <div><span className="text-gray-500">Číslo faktúry:</span> <span className="font-medium ml-1">{inv.invoiceNumber || '—'}</span></div>
-            <div><span className="text-gray-500">Variabilný symbol:</span> <span className="font-medium ml-1">{inv.variableSymbol || '—'}</span></div>
-            <div><span className="text-gray-500">Celková suma:</span> <span className="font-semibold ml-1 text-gray-900">{fmtEur(inv.totalAmount)}</span></div>
-            <div><span className="text-gray-500">Splatnosť:</span> <span className="font-medium ml-1">{inv.dueDate || '—'}</span></div>
-            <div><span className="text-gray-500">Dodávateľ:</span> <span className="font-medium ml-1">{inv.supplierName || '—'}{inv.supplierIco ? ` (IČO: ${inv.supplierIco})` : ''}</span></div>
-            <div><span className="text-gray-500">Odberateľ:</span> <span className="font-medium ml-1">{inv.customerName || '—'}{inv.customerIco ? ` (IČO: ${inv.customerIco})` : ''}</span></div>
-            <div><span className="text-gray-500">Súbor:</span> <span className="font-medium ml-1 text-xs text-gray-600">{inv.filename || '—'}</span></div>
-          </div>
-
-          {/* Položky */}
-          {items.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Položky faktúry ({items.length})</h3>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>{['Názov','Množstvo','Jednotka','Cena/j','Celkom'].map(h => <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 border-b text-xs">{h}</th>)}</tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {items.map((it: any, i: number) => (
-                      <tr key={i} className="hover:bg-gray-50/50">
-                        <td className="px-3 py-2 text-sm">{it.name || '—'}</td>
-                        <td className="px-3 py-2 text-sm">{it.qty ?? '—'}</td>
-                        <td className="px-3 py-2 text-sm text-gray-500">{it.unit || '—'}</td>
-                        <td className="px-3 py-2 text-sm">{it.unit_price != null ? `${it.unit_price} €` : '—'}</td>
-                        <td className="px-3 py-2 text-sm font-medium">{it.total != null ? `${it.total} €` : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {editing ? (
+            <EditForm inv={inv} onSave={handleSaved} onCancel={() => setEditing(false)}/>
+          ) : (
+            <>
+              {/* Základné údaje */}
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                <div><span className="text-gray-500">Číslo faktúry:</span> <span className="font-medium ml-1">{inv.invoiceNumber || '—'}</span></div>
+                <div><span className="text-gray-500">Variabilný symbol:</span> <span className="font-medium ml-1">{inv.variableSymbol || '—'}</span></div>
+                <div><span className="text-gray-500">Celková suma:</span> <span className="font-semibold ml-1 text-gray-900">{fmtEur(inv.totalAmount)}</span></div>
+                <div><span className="text-gray-500">Splatnosť:</span> <span className="font-medium ml-1">{inv.dueDate || '—'}</span></div>
+                <div><span className="text-gray-500">Dodávateľ:</span> <span className="font-medium ml-1">{inv.supplierName || '—'}{inv.supplierIco ? ` (IČO: ${inv.supplierIco})` : ''}</span></div>
+                <div><span className="text-gray-500">Odberateľ:</span> <span className="font-medium ml-1">{inv.customerName || '—'}{inv.customerIco ? ` (IČO: ${inv.customerIco})` : ''}</span></div>
+                <div>
+                  <span className="text-gray-500">Súbor:</span>{' '}
+                  {inv.filePath ? (
+                    <a href={inv.filePath} target="_blank" rel="noopener noreferrer"
+                      className="font-medium ml-1 text-sycom-600 hover:text-sycom-700 inline-flex items-center gap-1">
+                      {inv.filename || inv.filePath.split('/').pop()}
+                      <ExternalLink className="w-3 h-3"/>
+                    </a>
+                  ) : (
+                    <span className="font-medium ml-1 text-xs text-gray-400">{inv.filename || '—'}</span>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Chyba */}
-          {inv.error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{inv.error}</div>
-          )}
+              {/* Položky */}
+              {items.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Položky faktúry ({items.length})</h3>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>{['Názov','Množstvo','Jednotka','Cena/j','Celkom'].map(h => <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 border-b text-xs">{h}</th>)}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {items.map((it: any, i: number) => (
+                          <tr key={i} className="hover:bg-gray-50/50">
+                            <td className="px-3 py-2 text-sm">{it.name || '—'}</td>
+                            <td className="px-3 py-2 text-sm">{it.qty ?? '—'}</td>
+                            <td className="px-3 py-2 text-sm text-gray-500">{it.unit || '—'}</td>
+                            <td className="px-3 py-2 text-sm">{it.unit_price != null ? `${it.unit_price} €` : '—'}</td>
+                            <td className="px-3 py-2 text-sm font-medium">{it.total != null ? `${it.total} €` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
-          {/* Duplicita */}
-          {inv.isDuplicate && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              Táto faktúra je duplikátom — nebola automaticky evidovaná.
-              {inv.duplicateOfId && ` Originál ID: ${inv.duplicateOfId}`}
-            </div>
-          )}
+              {inv.error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{inv.error}</div>}
+              {inv.isDuplicate && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                  Duplicitná faktúra — nebola automaticky evidovaná.{inv.duplicateOfId && ` Originál ID: ${inv.duplicateOfId}`}
+                </div>
+              )}
 
-          {/* Akcie pre dodávateľskú */}
-          {isDodavatel && isPending && items.length > 0 && (
-            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-              <button
-                onClick={() => onAccept(inv.id)}
-                disabled={!!actionLoading}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
-              >
-                {actionLoading === inv.id + '-accept' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Package className="w-4 h-4"/>}
-                Zaevidovať tovar do skladu
-              </button>
-              <button
-                onClick={() => onReject(inv.id)}
-                disabled={!!actionLoading}
-                className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
-              >
-                {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin"/> : <XCircle className="w-4 h-4"/>}
-                Nezaevidovať
-              </button>
-            </div>
-          )}
-          {isDodavatel && isPending && items.length === 0 && (
-            <div className="text-sm text-gray-500 italic pt-2 border-t border-gray-100">
-              Žiadne položky neboli rozpoznané — nie je čo evidovať do skladu.
-            </div>
+              {/* Akcie sklad */}
+              {isDodavatel && isPending && (
+                <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                  {items.length > 0 ? (
+                    <>
+                      <button onClick={() => onAccept(inv.id)} disabled={!!actionLoading}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+                        {actionLoading === inv.id + '-accept' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Package className="w-4 h-4"/>}
+                        Zaevidovať tovar do skladu
+                      </button>
+                      <button onClick={() => onReject(inv.id)} disabled={!!actionLoading}
+                        className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 hover:bg-gray-50">
+                        {actionLoading === inv.id + '-reject' ? <Loader2 className="w-4 h-4 animate-spin"/> : <XCircle className="w-4 h-4"/>}
+                        Nezaevidovať
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">Žiadne položky — nie je čo evidovať.</p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -142,12 +266,13 @@ function InvoiceDetail({ inv, onClose, onAccept, onReject, actionLoading }: {
   )
 }
 
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function Faktury() {
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [filter, setFilter]     = useState('all')
-  const [selected, setSelected] = useState<Invoice | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [invoices, setInvoices]       = useState<Invoice[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [filter, setFilter]           = useState('all')
+  const [selected, setSelected]       = useState<Invoice | null>(null)
+  const [actionLoading, setActionLoad] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -157,26 +282,30 @@ export default function Faktury() {
 
   useEffect(() => { load() }, [load])
 
+  const handleUpdate = (updated: Invoice) => {
+    setInvoices(p => p.map(i => i.id === updated.id ? updated : i))
+  }
+
   const handleAccept = async (id: string) => {
-    setActionLoading(id + '-accept')
+    setActionLoad(id + '-accept')
     try {
       const r = await fetch(`/api/faktury/${id}/accept`, { method: 'POST' }).then(r => r.json())
       if (r.ok) {
         setInvoices(p => p.map(i => i.id === id ? { ...i, stockStatus: 'accepted' } : i))
         if (selected?.id === id) setSelected(p => p ? { ...p, stockStatus: 'accepted' } : p)
       }
-    } finally { setActionLoading(null) }
+    } finally { setActionLoad(null) }
   }
 
   const handleReject = async (id: string) => {
-    setActionLoading(id + '-reject')
+    setActionLoad(id + '-reject')
     try {
       const r = await fetch(`/api/faktury/${id}/reject`, { method: 'POST' }).then(r => r.json())
       if (r.ok) {
         setInvoices(p => p.map(i => i.id === id ? { ...i, stockStatus: 'rejected' } : i))
         if (selected?.id === id) setSelected(p => p ? { ...p, stockStatus: 'rejected' } : p)
       }
-    } finally { setActionLoading(null) }
+    } finally { setActionLoad(null) }
   }
 
   const pendingCount = invoices.filter(i => i.stockStatus === 'pending').length
@@ -186,7 +315,7 @@ export default function Faktury() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-blue-600" />
+            <FileText className="w-6 h-6 text-blue-600"/>
             <h1 className="text-2xl font-bold text-gray-900">Faktúry</h1>
             {pendingCount > 0 && (
               <span className="bg-amber-100 text-amber-700 border border-amber-200 text-xs font-semibold px-2.5 py-1 rounded-full">
@@ -199,7 +328,6 @@ export default function Faktury() {
           </button>
         </div>
 
-        {/* Filter */}
         <div className="flex gap-2 mb-4">
           {[
             { key: 'all',       label: 'Všetky' },
@@ -208,7 +336,7 @@ export default function Faktury() {
             { key: 'odberatel', label: 'Odberateľské' },
           ].map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f.key ? 'bg-sycom-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {f.label}
             </button>
           ))}
@@ -237,15 +365,8 @@ export default function Faktury() {
                       const isDodavatel = inv.direction === 'dodavatel'
                       const isPending   = inv.stockStatus === 'pending'
                       return (
-                        <tr
-                          key={inv.id}
-                          onClick={() => setSelected(inv)}
-                          className={`cursor-pointer transition-colors ${
-                            isDodavatel && isPending
-                              ? 'bg-red-50/60 hover:bg-red-50'
-                              : 'hover:bg-gray-50/80'
-                          }`}
-                        >
+                        <tr key={inv.id} onClick={() => setSelected(inv)}
+                          className={`cursor-pointer transition-colors ${isDodavatel && isPending ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50/80'}`}>
                           <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{fmtDt(inv.createdAt)}</td>
                           <td className="px-4 py-3">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDodavatel ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -279,7 +400,6 @@ export default function Faktury() {
         }
       </div>
 
-      {/* Detail modal */}
       {selected && (
         <InvoiceDetail
           inv={selected}
@@ -287,6 +407,7 @@ export default function Faktury() {
           onAccept={handleAccept}
           onReject={handleReject}
           actionLoading={actionLoading}
+          onUpdate={(updated) => { handleUpdate(updated); setSelected(updated) }}
         />
       )}
     </PortalLayout>

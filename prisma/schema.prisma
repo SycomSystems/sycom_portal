@@ -550,6 +550,7 @@ model InvoiceOcrResult {
   filename           String?
   recognitionMethod  String?
   error              String?              @db.Text
+  filePath           String?
   isDuplicate        Boolean              @default(false)
   stockStatus        String               @default("na")  // na | pending | accepted | rejected
   duplicateOfId      String?
