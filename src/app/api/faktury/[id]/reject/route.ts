@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  if (!session || !['ADMIN','AGENT'].includes((session.user as any).role))
+  if (!session || (session.user as any).role !== 'ADMIN')
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const ocr = await prisma.invoiceOcrResult.findUnique({ where: { id: params.id } })
