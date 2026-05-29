@@ -183,7 +183,7 @@ async function findDuplicate(parsed) {
     if (h) return h
   }
   if (sName) {
-    const h = await prisma.invoiceOcrResult.findFirst({ where: { ...where, supplierName: { equals: sName, mode: 'insensitive' } } })
+    const h = await prisma.invoiceOcrResult.findFirst({ where: { ...where, supplierName: { equals: sName } } })
     if (h) return h
   }
   return null

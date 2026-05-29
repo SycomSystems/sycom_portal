@@ -345,18 +345,16 @@ async function processMessage(imap, msg) {
   const creator = creatorResult.user
 
   // ── 2. Resolve client ─────────────────────────────────────────────────────
-  // Priority: emailAlias match → creator's client
+  // Iba emailAlias zhoda — bez fallbacku na creator.clientId.
+  // Ak žiadny klient nemá nastavenú príjmaciu adresu (emailAlias), tiket sa nevytvorí.
   let matchedClient = null
   for (const addr of toAddrs) {
     matchedClient = await prisma.client.findFirst({ where: { emailAlias: addr } })
     if (matchedClient) break
   }
-  if (!matchedClient && creator.clientId) {
-    matchedClient = await prisma.client.findUnique({ where: { id: creator.clientId } })
-  }
 
   if (!matchedClient) {
-    log('info', `[poller] No client resolved for ${sender} — skipping`)
+    log('info', `[poller] No emailAlias match for ${sender} (To: ${toAddrs.join(', ')}) — skipping, no client configured for this address`)
     return
   }
 
