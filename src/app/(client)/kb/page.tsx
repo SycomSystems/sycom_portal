@@ -43,7 +43,7 @@ export default function KbPage() {
     <PortalLayout>
       <div className="w-full mx-auto py-20 text-center px-6">
         <BookOpen size={40} className="text-gray-300 mx-auto mb-4"/>
-        <h2 className="text-xl font-bold text-gray-700 mb-2">Znalostná báza</h2>
+        <h2 className="text-xl font-bold text-gray-700 mb-2">Knowledge base</h2>
         <p className="text-gray-500 text-sm">Táto sekcia je dostupná iba pre pracovníkov podpory.</p>
       </div>
     </PortalLayout>
@@ -53,7 +53,7 @@ export default function KbPage() {
     <PortalLayout>
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Znalostná báza</h1>
+          <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Knowledge base</h1>
           <p className="text-sm text-gray-400 mt-0.5">Návody, riešenia a dokumentácia</p>
         </div>
         {isStaff && (
