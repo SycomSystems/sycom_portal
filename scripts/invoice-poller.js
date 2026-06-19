@@ -88,6 +88,16 @@ async function loadSettings() {
   return s
 }
 
+async function getSupplierHint(supplierName) {
+  if (!supplierName) return null
+  try {
+    const hint = await prisma.supplierHint.findFirst({
+      where: { supplierName: { equals: supplierName } }
+    })
+    return hint?.hint || null
+  } catch { return null }
+}
+
 // ── PDF → text ─────────────────────────────────────────────────────────────────
 async function extractText(buffer) {
   try {
@@ -136,15 +146,35 @@ function parseRegex(text) {
 
 // ── OpenAI parser ──────────────────────────────────────────────────────────────
 async function parseOpenAI(text, apiKey) {
+  // Fetch supplier hint for this invoice if we can pre-identify supplier
+  const preSupplier = text.match(/IČO[:\s]+(\d{6,10})/i)?.[1] || null
+  let hintLine = ''
+  if (preSupplier) {
+    const hint = await prisma.supplierHint.findFirst({ where: { supplierName: { contains: preSupplier } } }).catch(() => null)
+    if (hint?.hint) hintLine = '\nDôležitá poznámka k tomuto dodávateľovi: ' + hint.hint
+  }
+
   const prompt = [
-    'Extrahuj z textu faktúry tieto polia ako JSON:',
+    'Extrahuj z textu slovenskej faktúry nasledujúce polia ako JSON objekt.',
+    '',
+    'DÔLEŽITÉ — špecifiká slovenských PDF faktúr:',
+    '- Text je extrahovaný z PDF, poradie textu NEMUSÍ zodpovedať vizuálnemu rozloženiu faktúry',
+    '- Dodávateľ (supplierName) = kto faktúru VYSTAVIL; Odberateľ (customerName) = PRÍJEMCA faktúry',
+    '- Blok s adresou odberateľa sa v texte môže objaviť PRED labelom "Odberateľ:" — hľadaj ho aj tam',
+    '- Dátum vystavenia hľadaj za: "zo dňa", "vystavené", "dátum vystavenia", "date"',
+    '- Dátum splatnosti hľadaj za: "splatnosť", "splatné do", "due date", "uhradiť do"',
+    '- IČO má 6-10 číslic, hľadaj za: IČO, IČ, Reg.č.',
+    hintLine,
+    '',
+    'Polia (chýbajúce = null, vráť IBA JSON):',
     'supplierName, supplierIco, customerName, customerIco,',
-    'invoiceNumber, variableSymbol (ak chýba použi invoiceNumber),',
-    'totalAmount (číslo), dueDate (DD.MM.YYYY),',
-    'items [{name, qty, unit, unit_price, total}].',
-    'IČO = 6-8 číslic. Chýbajúce pole = null. Iba JSON.',
-    '', 'TEXT:', text.slice(0, 4000),
-  ].join('\n')
+    'invoiceNumber, variableSymbol (VS pre platbu; ak chýba = invoiceNumber),',
+    'totalAmount (číslo bez meny), issueDate (DD.MM.YYYY), dueDate (DD.MM.YYYY),',
+    'items [{name, qty, unit, unit_price, total}]',
+    '',
+    'TEXT FAKTÚRY:',
+    text.slice(0, 4000),
+  ].filter(x => x !== null).join('\n')
 
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 30000)
@@ -222,7 +252,7 @@ async function processPdf(att, sender, subject, settings) {
     let method  = 'regex'
     let aiLogId = null
 
-    if (!pdata._complete && settings['openai_api_key']) {
+    if (settings['openai_api_key']) {
       try {
         const ai    = await parseOpenAI(text, settings['openai_api_key'])
         const aiLog = await prisma.aiApiLog.create({
@@ -252,7 +282,7 @@ async function processPdf(att, sender, subject, settings) {
         invoiceNumber: pdata.invoiceNumber || null, variableSymbol: pdata.variableSymbol || null,
         totalAmount: pdata.totalAmount ?? null, dueDate: pdata.dueDate || null,
         items: pdata.items?.length ? JSON.stringify(pdata.items) : null,
-        sourceEmail: sender, filename: att.filename, recognitionMethod: method,
+        sourceEmail: sender, filename: att.filename, filePath: filePath || null, issueDate: pdata.issueDate || null, recognitionMethod: method,
         error: pdata.error || null, isDuplicate, duplicateOfId: duplicate?.id || null,
         stockStatus,
       },

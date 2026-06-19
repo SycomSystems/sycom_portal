@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       category:       category?.trim() || null,
       description:    description?.trim() || null,
       unit:           unit || 'ks',
-      vatRate:        Number(vatRate) || 20,
+      vatRate:        Number(vatRate) || 23,
       minStock:       Number(minStock) || 0,
       maxStock:       Number(maxStock) || 0,
       location:       location?.trim() || null,

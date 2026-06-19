@@ -1,0 +1,95 @@
+# sycom-portal – IT Support Portal
+
+## O projekte
+Fullstack IT support portal pre Sycom s.r.o.
+- Produkcia: /opt/sycom-portal (PM2 id:0, port 3000, domena portal.sycom.sk)
+- Staging:   /opt/sycom-portal-staging (PM2 id:2, port 3001)
+- Staging je testovaci server pred nasadenim na produkciu
+
+## Tech stack
+- Framework: Next.js 14 (App Router)
+- Databaza: MariaDB 10.6+ cez Prisma ORM
+- Auth: NextAuth (JWT session, role-based: ADMIN / AGENT / CLIENT)
+- UI: Tailwind CSS, Recharts, React Hook Form, Zod
+- Email: nodemailer, imapflow, mailparser
+- PDF: jsPDF, html2canvas
+- Runtime: PM2 cluster mode, Nginx reverse proxy
+
+## Struktura projektu
+src/app/api/
+  auth/        NextAuth
+  tickets/     CRUD tiketov
+  users/       sprava pouzivatelov
+  kb/          znalostna baza
+  reports/     statistiky
+
+src/app/(auth)/login/     prihlasovacia stranka
+src/app/(client)/         klientska cast
+  dashboard/
+  tickets/
+  kb/
+src/app/(admin)/admin/    admin sekcia
+  users/
+  teams/
+  reports/
+
+src/lib/
+  prisma.ts    DB klient
+  auth.ts      NextAuth konfiguracia
+  email.ts     emailove notifikacie
+  utils.ts     pomocne funkcie
+
+prisma/
+  schema.prisma   databazova schema
+  seed.ts         testovacie data
+
+## Dolezite subory
+- .env / .env.example    environment premenne
+- ecosystem.config.js    PM2 konfiguracia
+- sycom-portal.nginx     Nginx konfiguracia
+- deploy.sh              deploy skript
+
+## Bezpecnost
+- Hesla: bcrypt (cost factor 12)
+- Sessions: JWT cez NextAuth
+- RBAC: ADMIN / AGENT / CLIENT role
+- Validacia: Zod
+- DB: Prisma ORM (SQL injection ochrana)
+- HTTPS + HSTS cez Nginx
+
+## Testovacie ucty (staging)
+- Admin:  admin@sycom.sk       / Admin@Sycom2024!
+- Agent:  marek.kovac@sycom.sk / Agent@Sycom2024!
+- Klient: jan.novak@firma.sk   / Client@2024!
+
+## Prikazy - produkcia
+  pm2 restart sycom-portal
+  pm2 logs sycom-portal
+  cd /opt/sycom-portal
+  npm run build
+  npx prisma generate
+  npx prisma db push
+  npx prisma migrate deploy
+
+## Prikazy - staging
+  pm2 restart sycom-portal-staging
+  pm2 logs sycom-portal-staging
+  cd /opt/sycom-portal-staging
+  npm run build
+
+## Databaza (MariaDB)
+  mysqldump -u sycom_user -p sycom_portal > backup_$(date +%Y%m%d).sql
+  mysql -u sycom_user -p sycom_portal < backup.sql
+
+## Deploy workflow
+1. Zmen kod na staging (/opt/sycom-portal-staging)
+2. npm run build && pm2 restart sycom-portal-staging
+3. Otestuj na porte 3001
+4. Prenesies zmeny na produkciu (/opt/sycom-portal)
+5. npm run build && pm2 restart sycom-portal
+
+## Pravidla
+- NIKDY priamo na produkciu - vzdy cez staging
+- Po zmene DB schemy: npx prisma migrate deploy
+- Po zmene kodu: npm run build pred pm2 restart
+- Logy: /root/.pm2/logs/sycom-portal-*.log

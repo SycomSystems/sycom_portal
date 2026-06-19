@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   let text = ''
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require('pdf-parse')
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js')
     const data = await pdfParse(fs.readFileSync(absPath))
     text = data.text || ''
   } catch (e: any) {
@@ -46,13 +46,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const hintLine = hint?.hint ? `\nDôležité pre tohto dodávateľa: ${hint.hint}` : ''
 
   const prompt = [
-    'Extrahuj z nasledujúceho textu faktúry tieto polia ako JSON:',
+    'Extrahuj z textu slovenskej faktúry nasledujúce polia ako JSON objekt.',
+    '',
+    'DÔLEŽITÉ — špecifiká slovenských PDF faktúr:',
+    '- Text je extrahovaný z PDF, poradie textu NEMUSÍ zodpovedať vizuálnemu rozloženiu faktúry',
+    '- Dodávateľ (supplierName) = kto faktúru VYSTAVIL; Odberateľ (customerName) = PRÍJEMCA faktúry',
+    '- Blok s adresou odberateľa sa v texte môže objaviť PRED labelom "Odberateľ:" — hľadaj ho aj tam',
+    '- Dátum vystavenia hľadaj za: "zo dňa", "vystavené", "dátum vystavenia", "date"',
+    '- Dátum splatnosti hľadaj za: "splatnosť", "splatné do", "due date", "uhradiť do"',
+    '- IČO má 6-10 číslic, hľadaj za: IČO, IČ, Reg.č.',
+    hintLine ? hintLine : null,
+    '',
+    'Polia (chýbajúce = null, vráť IBA JSON):',
     'supplierName, supplierIco, customerName, customerIco,',
     'invoiceNumber, variableSymbol (VS pre platbu; ak chýba = invoiceNumber),',
-    'totalAmount (číslo), dueDate (DD.MM.YYYY),',
-    'items [{name, qty, unit, unit_price, total}]. Chýbajúce = null. IBA JSON.' + hintLine,
-    '', 'TEXT:', text.slice(0, 4000),
-  ].join('\n')
+    'totalAmount (číslo bez meny), issueDate (DD.MM.YYYY), dueDate (DD.MM.YYYY),',
+    'items [{name, qty, unit, unit_price, total}]',
+    '',
+    'TEXT FAKTÚRY:',
+    text.slice(0, 4000),
+  ].filter((x): x is string => x !== null).join('\n')
 
   try {
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -102,6 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         invoiceNumber:    parsed.invoiceNumber  || ocr.invoiceNumber,
         variableSymbol:   parsed.variableSymbol || parsed.invoiceNumber || ocr.variableSymbol,
         totalAmount:      parsed.totalAmount != null ? Number(parsed.totalAmount) : ocr.totalAmount,
+        issueDate:        parsed.issueDate      || ocr.issueDate,
         dueDate:          parsed.dueDate        || ocr.dueDate,
         items:            parsed.items?.length  ? JSON.stringify(parsed.items) : ocr.items,
         recognitionMethod: 'openai',

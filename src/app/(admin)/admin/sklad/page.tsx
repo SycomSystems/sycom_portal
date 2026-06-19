@@ -126,7 +126,7 @@ export default function SkladPage() {
   const [sellDate, setSellDate] = useState(new Date().toISOString().slice(0, 10))
   const [sellNote, setSellNote] = useState('')
   const [sellInvoice, setSellInvoice] = useState('')
-  const [sellMarkup, setSellMarkup] = useState('20')
+  const [sellMarkup, setSellMarkup] = useState('23')
   const [sellSubmitting, setSellSubmitting] = useState(false)
   const [sellSelectedItem, setSellSelectedItem] = useState<StockItem|null>(null)
 
@@ -144,7 +144,7 @@ export default function SkladPage() {
   const [niSku, setNiSku] = useState('')
   const [niCategory, setNiCategory] = useState('')
   const [niUnit, setNiUnit] = useState('ks')
-  const [niVat, setNiVat] = useState('20')
+  const [niVat, setNiVat] = useState('23')
   const [niSellingPrice, setNiSellingPrice] = useState('')
   const [niMinStock, setNiMinStock] = useState('0')
   const [niSubmitting, setNiSubmitting] = useState(false)
@@ -253,7 +253,7 @@ export default function SkladPage() {
         body: JSON.stringify({
           name: niName.trim(), sku: niSku.trim() || undefined,
           category: niCategory.trim() || undefined, unit: niUnit,
-          vatRate: parseFloat(niVat) || 20,
+          vatRate: parseFloat(niVat) || 23,
           sellingPrice: parseFloat(niSellingPrice) || 0,
           minStock: parseInt(niMinStock) || 0,
         }),
@@ -262,7 +262,7 @@ export default function SkladPage() {
       if (!res.ok) throw new Error(data.error || 'Chyba')
       setModal(null)
       setNiName(''); setNiSku(''); setNiCategory(''); setNiUnit('ks')
-      setNiVat('20'); setNiSellingPrice(''); setNiMinStock('0')
+      setNiVat('23'); setNiSellingPrice(''); setNiMinStock('0')
       load()
       showStatus('success', 'Karta tovaru bola vytvorená.')
     } catch (e: any) { showStatus('error', e.message) }
@@ -312,7 +312,7 @@ export default function SkladPage() {
         body: JSON.stringify({
           type: 'SELL', stockItemId: sellItemId,
           quantity: parseFloat(sellQty), pricePerUnit: parseFloat(sellPrice),
-          vatRate: sellSelectedItem?.vatRate ?? 20,
+          vatRate: sellSelectedItem?.vatRate ?? 23,
           clientId: sellClientId || null,
           note: sellNote || null, date: sellDate, invoiceNumber: sellInvoice || null,
         }),
@@ -852,7 +852,7 @@ export default function SkladPage() {
                     step="1"
                     value={niVat}
                     onChange={e => setNiVat(e.target.value)}
-                    placeholder="20"
+                    placeholder="23"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sycom-primary/40"
                   />
                 </div>
@@ -880,7 +880,7 @@ export default function SkladPage() {
                 {niSubmitting ? 'Ukladám...' : 'Vytvoriť kartu'}
               </button>
               <button
-                onClick={() => { setModal(null); setNiName(''); setNiSku(''); setNiCategory(''); setNiUnit('ks'); setNiVat('20'); setNiSellingPrice(''); setNiMinStock(''); setNiError('') }}
+                onClick={() => { setModal(null); setNiName(''); setNiSku(''); setNiCategory(''); setNiUnit('ks'); setNiVat('23'); setNiSellingPrice(''); setNiMinStock(''); setNiError('') }}
                 className="px-4 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Zrušiť

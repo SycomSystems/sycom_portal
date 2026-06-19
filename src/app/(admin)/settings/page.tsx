@@ -59,7 +59,7 @@ export default function SettingsPage() {
     fetch('/api/settings/logo')
       .then((r) => r.json())
       .then((data) => {
-        if (data.filename) setLogoUrl(`/uploads/${data.filename}?t=${Date.now()}`)
+        if (data.filename) setLogoUrl(`/api/settings/logo/image?t=${Date.now()}`)
       })
       .catch(() => {})
 
@@ -120,7 +120,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings/logo', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload zlyhal')
-      setLogoUrl(`${data.url}?t=${Date.now()}`)
+      setLogoUrl(`/api/settings/logo/image?t=${Date.now()}`)
       setLogoStatus({ type: 'success', message: 'Logo bolo úspešne nahrané a bude použité v celom portáli.' })
     } catch (e: any) {
       setLogoStatus({ type: 'error', message: e.message })

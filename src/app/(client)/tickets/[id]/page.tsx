@@ -54,6 +54,7 @@ export default function TicketDetailPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editCommentBody, setEditCommentBody] = useState('')
+  const [editCommentDate, setEditCommentDate] = useState('')
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null)
   const [assigneeId, setAssigneeId] = useState('')
   const [newStatus, setNewStatus] = useState('')
@@ -121,7 +122,7 @@ export default function TicketDetailPage() {
       const res = await fetch('/api/comments/' + commentId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: editCommentBody.trim() }),
+        body: JSON.stringify({ body: editCommentBody.trim(), ...(editCommentDate ? { createdAt: editCommentDate } : {}) }),
       })
       if (!res.ok) throw new Error()
       queryClient.invalidateQueries({ queryKey: ['ticket', id] })
@@ -421,7 +422,7 @@ export default function TicketDetailPage() {
                       </span>
                     )}
                     {(isAdmin || c.author?.id === (session?.user as any)?.id) && editingCommentId !== c.id && (
-                      <button onClick={() => { setEditingCommentId(c.id); setEditCommentBody(c.body) }} className="p-1 text-gray-300 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors">
+                      <button onClick={() => { setEditingCommentId(c.id); setEditCommentBody(c.body); setEditCommentDate(c.createdAt ? new Date(c.createdAt).toISOString().slice(0,10) : '') }} className="p-1 text-gray-300 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors">
                         <Pencil size={13} />
                       </button>
                     )}
@@ -436,6 +437,13 @@ export default function TicketDetailPage() {
                   <div className="mt-2 space-y-2">
                     <textarea value={editCommentBody} onChange={e => setEditCommentBody(e.target.value)} rows={3}
                       className="w-full px-3 py-2 border border-sycom-300 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
+                    {c.workedHours > 0 && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-500 shrink-0">Dátum záznamu:</label>
+                        <input type="date" value={editCommentDate} onChange={e => setEditCommentDate(e.target.value)}
+                          className="px-3 py-1.5 border border-sycom-300 rounded-xl text-sm focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100" />
+                      </div>
+                    )}
                     <div className="flex gap-2 justify-end">
                       <button onClick={() => setEditingCommentId(null)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"><X size={12}/> Zrušiť</button>
                       <button onClick={() => handleSaveComment(c.id)} disabled={savingCommentId === c.id || !editCommentBody.trim()} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sycom-500 text-white rounded-lg hover:bg-sycom-600 disabled:opacity-50"><Save size={12}/> {savingCommentId === c.id ? 'Ukladám...' : 'Uložiť'}</button>

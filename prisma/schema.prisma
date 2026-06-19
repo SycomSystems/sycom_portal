@@ -550,10 +550,13 @@ model InvoiceOcrResult {
   filename           String?
   recognitionMethod  String?
   error              String?              @db.Text
-  filePath           String?
+  filePath           String?              @db.VarChar(500)
   extractedText      String?  @db.Text
   isDuplicate        Boolean              @default(false)
   stockStatus        String               @default("na")  // na | pending | accepted | rejected
+  issueDate          String?              // dátum vystavenia z faktúry (DD.MM.YYYY)
+  isPaid             Boolean              @default(false)
+  paidAt             DateTime?
   duplicateOfId      String?
   duplicateOf        InvoiceOcrResult?    @relation("DuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates         InvoiceOcrResult[]   @relation("DuplicateOf")

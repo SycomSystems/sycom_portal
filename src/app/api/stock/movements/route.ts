@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         category:    newItemCategory?.trim() || null,
         description: newItemDescription?.trim() || null,
         unit:        newItemUnit || 'ks',
-        vatRate:     Number(vatRate) || 20,
+        vatRate:     Number(vatRate) || 23,
         minStock:    Number(newItemMinStock) || 0,
         location:    newItemLocation?.trim() || null,
       },
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   const qty   = Number(quantity)
   const price = Number(pricePerUnit) || 0
   const total = qty * price
-  const vat   = Number(vatRate) || 20
+  const vat   = Number(vatRate) || 23
 
   // Determine stock direction
   const isInbound  = ['BUY', 'RETURN_FROM_CUSTOMER', 'CORRECTION'].includes(type)
@@ -224,9 +224,22 @@ export async function PATCH(req: NextRequest) {
     },
   })
 
+  // Recalculate avgPurchasePrice from all BUY movements for this item
+  const allBuys = await prisma.stockMovement.findMany({
+    where: { stockItemId: old.stockItemId, type: 'BUY' },
+    select: { quantity: true, pricePerUnit: true },
+  })
+  const totalQty = allBuys.reduce((s, m) => s + m.quantity, 0)
+  const avgPrice = totalQty > 0
+    ? allBuys.reduce((s, m) => s + m.quantity * m.pricePerUnit, 0) / totalQty
+    : 0
+
   await prisma.stockItem.update({
     where: { id: old.stockItemId },
-    data:  { currentStock: { increment: stockAdjust } },
+    data: {
+      currentStock:     { increment: stockAdjust },
+      avgPurchasePrice: avgPrice,
+    },
   })
 
   return NextResponse.json({ success: true })

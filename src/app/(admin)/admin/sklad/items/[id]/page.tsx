@@ -28,13 +28,53 @@ export default function StockItemDetailPage() {
   const [editing,   setEditing]   = useState(false)
   const [status,    setStatus]    = useState<{type:'success'|'error'; msg:string}|null>(null)
 
+  // Movement inline editing
+  const [editingMovement, setEditingMovement] = useState<string | null>(null)
+  const [mQty,   setMQty]   = useState('')
+  const [mPrice, setMPrice] = useState('')
+  const [mNote,  setMNote]  = useState('')
+  const [mInv,   setMInv]   = useState('')
+  const [mSaving, setMSaving] = useState(false)
+
+  const startEditMovement = (m: any) => {
+    setEditingMovement(m.id)
+    setMQty(String(m.quantity))
+    setMPrice(String(m.pricePerUnit))
+    setMNote(m.note || '')
+    setMInv(m.invoiceNumber || '')
+  }
+
+  const handleSaveMovement = async (movId: string) => {
+    setMSaving(true)
+    try {
+      const res = await fetch(`/api/stock/movements?id=${movId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: Number(mQty), pricePerUnit: Number(mPrice), note: mNote, invoiceNumber: mInv }),
+      })
+      if (!res.ok) throw new Error('Chyba pri ukladaní')
+      setEditingMovement(null)
+      load()
+      showStatus('success', 'Pohyb bol upravený.')
+    } catch (e: any) { showStatus('error', e.message) }
+    finally { setMSaving(false) }
+  }
+
+  const handleDeleteMovement = async (movId: string) => {
+    if (!confirm('Naozaj vymazať tento pohyb? Stav skladu sa upraví.')) return
+    const res = await fetch(`/api/stock/movements?id=${movId}`, { method: 'DELETE' })
+    if (!res.ok) { showStatus('error', 'Chyba pri mazaní'); return }
+    load()
+    showStatus('success', 'Pohyb bol vymazaný.')
+  }
+
   // Edit form
   const [eName,            setEName]            = useState('')
   const [eSku,             setESku]             = useState('')
   const [eCategory,        setECategory]        = useState('')
   const [eDescription,     setEDescription]     = useState('')
   const [eUnit,            setEUnit]            = useState('ks')
-  const [eVatRate,         setEVatRate]         = useState('20')
+  const [eVatRate,         setEVatRate]         = useState('23')
   const [eMinStock,        setEMinStock]        = useState('0')
   const [eMaxStock,        setEMaxStock]        = useState('0')
   const [eLocation,        setELocation]        = useState('')
@@ -67,7 +107,7 @@ export default function StockItemDetailPage() {
       setECategory(itemRes.category || '')
       setEDescription(itemRes.description || '')
       setEUnit(itemRes.unit || 'ks')
-      setEVatRate(String(itemRes.vatRate || 20))
+      setEVatRate(String(itemRes.vatRate || 23))
       setEMinStock(String(itemRes.minStock || 0))
       setEMaxStock(String(itemRes.maxStock || 0))
       setELocation(itemRes.location || '')
@@ -265,27 +305,65 @@ export default function StockItemDetailPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      {['Typ','Množstvo','Cena/ks','Spolu','Dátum','Dodávateľ/Zákazník','Faktúra','Zapísal'].map(h => (
+                      {['Typ','Množstvo','Cena/ks','Spolu','Dátum','Dodávateľ/Zákazník','Faktúra','Zapísal',''].map(h => (
                         <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {movements.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">Žiadne pohyby.</td></tr>
+                      <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">Žiadne pohyby.</td></tr>
                     ) : movements.map((m: any) => (
-                      <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-2.5">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${MOVEMENT_COLORS[m.type] || 'bg-gray-100 text-gray-700'}`}>{MOVEMENT_LABELS[m.type] || m.type}</span>
-                        </td>
-                        <td className="px-4 py-2.5 font-medium">{m.quantity} {item.unit}</td>
-                        <td className="px-4 py-2.5">{fmt(m.pricePerUnit)} €</td>
-                        <td className="px-4 py-2.5 font-semibold">{fmt(m.totalPrice)} €</td>
-                        <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtDate(m.date)}</td>
-                        <td className="px-4 py-2.5 text-gray-600">{m.supplier?.name || m.client?.name || '—'}</td>
-                        <td className="px-4 py-2.5 text-xs font-mono text-sycom-600">{m.invoiceNumber || '—'}</td>
-                        <td className="px-4 py-2.5 text-gray-400 text-xs">{m.addedBy?.name}</td>
-                      </tr>
+                      editingMovement === m.id ? (
+                        <tr key={m.id} className="bg-sycom-50">
+                          <td className="px-4 py-2.5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${MOVEMENT_COLORS[m.type] || 'bg-gray-100 text-gray-700'}`}>{MOVEMENT_LABELS[m.type] || m.type}</span>
+                          </td>
+                          <td className="px-2 py-2"><input type="number" min="0" step="0.01" value={mQty} onChange={e => setMQty(e.target.value)} className="w-20 px-2 py-1 border border-sycom-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sycom-400" /></td>
+                          <td className="px-2 py-2"><input type="number" min="0" step="0.01" value={mPrice} onChange={e => setMPrice(e.target.value)} className="w-24 px-2 py-1 border border-sycom-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sycom-400" /></td>
+                          <td className="px-4 py-2.5 text-xs text-gray-400">{fmt(Number(mQty) * Number(mPrice))} €</td>
+                          <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtDate(m.date)}</td>
+                          <td className="px-4 py-2.5 text-gray-600">{m.supplier?.name || m.client?.name || '—'}</td>
+                          <td className="px-2 py-2"><input value={mInv} onChange={e => setMInv(e.target.value)} placeholder="č. faktúry" className="w-28 px-2 py-1 border border-sycom-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-sycom-400" /></td>
+                          <td className="px-2 py-2"><input value={mNote} onChange={e => setMNote(e.target.value)} placeholder="poznámka" className="w-28 px-2 py-1 border border-sycom-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-sycom-400" /></td>
+                          <td className="px-2 py-2">
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleSaveMovement(m.id)} disabled={mSaving}
+                                className="p-1.5 bg-sycom-500 text-white rounded hover:bg-sycom-600 disabled:opacity-50">
+                                <Check size={12}/>
+                              </button>
+                              <button onClick={() => setEditingMovement(null)} className="p-1.5 border border-gray-200 text-gray-500 rounded hover:bg-gray-100">
+                                <X size={12}/>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={m.id} className="hover:bg-gray-50 transition-colors group">
+                          <td className="px-4 py-2.5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${MOVEMENT_COLORS[m.type] || 'bg-gray-100 text-gray-700'}`}>{MOVEMENT_LABELS[m.type] || m.type}</span>
+                          </td>
+                          <td className="px-4 py-2.5 font-medium">{m.quantity} {item.unit}</td>
+                          <td className="px-4 py-2.5">{fmt(m.pricePerUnit)} €</td>
+                          <td className="px-4 py-2.5 font-semibold">{fmt(m.totalPrice)} €</td>
+                          <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtDate(m.date)}</td>
+                          <td className="px-4 py-2.5 text-gray-600">{m.supplier?.name || m.client?.name || '—'}</td>
+                          <td className="px-4 py-2.5 text-xs font-mono text-sycom-600">{m.invoiceNumber || '—'}</td>
+                          <td className="px-4 py-2.5 text-gray-400 text-xs">{m.addedBy?.name}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => startEditMovement(m)} title="Upraviť"
+                                className="p-1.5 text-gray-400 hover:text-sycom-600 hover:bg-sycom-50 rounded">
+                                <Pencil size={12}/>
+                              </button>
+                              <button onClick={() => handleDeleteMovement(m.id)} title="Vymazať"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                <Trash2 size={12}/>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
                     ))}
                   </tbody>
                 </table>

@@ -14,7 +14,7 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { data: session } = useSession()
   const [menuOpen, setMenuOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(() => (typeof window !== "undefined" ? sessionStorage.getItem("portal-logo-url") : null))
   const [notifications, setNotifications] = useState<Notif[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const bellRef = useRef<HTMLDivElement>(null)
@@ -39,7 +39,11 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   useEffect(() => {
     fetch('/api/settings/logo')
       .then(r => r.json())
-      .then(data => { if (data.filename) setLogoUrl(`/uploads/${data.filename}?t=${Date.now()}`) })
+      .then(data => { if (data.filename) {
+        const url = `/api/settings/logo/image?t=${Date.now()}`
+        setLogoUrl(url)
+        sessionStorage.setItem('portal-logo-url', url)
+      } })
       .catch(() => {})
 
     fetchNotifications()

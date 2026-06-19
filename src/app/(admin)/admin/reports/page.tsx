@@ -17,6 +17,14 @@ const reportTypes = [
     color: 'border-sycom-200 hover:border-sycom-400',
     badge: 'bg-sycom-50 text-sycom-600',
   },
+  {
+    href: '/admin/reports/financny',
+    title: 'Finančný report',
+    desc: 'Príjmy a výdavky po mesiacoch, uhradené pohľadávky, odhadovaný zisk, top dodávatelia a odberatelia.',
+    icon: <FileText size={22} className="text-green-600" />,
+    color: 'border-green-200 hover:border-green-400',
+    badge: 'bg-green-50 text-green-600',
+  },
 ]
 
 export default function ReportsPage() {

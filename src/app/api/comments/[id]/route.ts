@@ -18,12 +18,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { body } = await req.json()
+  const { body, createdAt } = await req.json()
   if (!body?.trim()) return NextResponse.json({ error: 'Body is required' }, { status: 400 })
 
   const updated = await prisma.comment.update({
     where: { id: params.id },
-    data: { body: body.trim() },
+    data: { body: body.trim(), ...(createdAt ? { createdAt: new Date(createdAt) } : {}) },
   })
 
   await logAudit(userId, 'comment', params.id, 'EDIT_COMMENT', { body: comment.body }, { body: body.trim() })

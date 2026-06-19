@@ -64,7 +64,7 @@ function VykazPage() {
   }, [searchParams])
 
   useEffect(() => {
-    fetch('/api/settings/logo').then(r=>r.json()).then(d=>{if(d.filename)setLogoUrl('/uploads/'+d.filename)}).catch(()=>{})
+    fetch('/api/settings/logo').then(r=>r.json()).then(d=>{if(d.filename)setLogoUrl('/api/settings/logo/image')}).catch(()=>{})
   }, [])
 
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => fetch('/api/clients').then(r=>r.json()) })
@@ -123,38 +123,207 @@ function VykazPage() {
   function handlePrint() { window.print() }
 
   async function handleDownloadPdf() {
-    if (!printRef.current || !summary) return
+    const pdfText = (s: string) => (s ?? '').toString()
+      .replace(/č/g,'c').replace(/Č/g,'C')
+      .replace(/ľ/g,'l').replace(/Ľ/g,'L')
+      .replace(/ĺ/g,'l').replace(/Ĺ/g,'L')
+      .replace(/ď/g,'d').replace(/Ď/g,'D')
+      .replace(/ť/g,'t').replace(/Ť/g,'T')
+      .replace(/ň/g,'n').replace(/Ň/g,'N')
+      .replace(/ŕ/g,'r').replace(/Ŕ/g,'R')
+    if (!summary) return
     setPdfLoading(true)
     try {
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import('jspdf' as any), import('html2canvas' as any),
-      ])
-      const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageW = pdf.internal.pageSize.getWidth()
-      const pageH = pdf.internal.pageSize.getHeight()
-      const imgW = pageW - 16
-      const imgH = (canvas.height * imgW) / canvas.width
-      let remaining = imgH; let first = true
-      while (remaining > 0) {
-        const sliceH = Math.min(remaining, pageH-16)
-        const srcY = (imgH-remaining)*(canvas.height/imgH)
-        const srcH = sliceH*(canvas.height/imgH)
-        const sc = document.createElement('canvas')
-        sc.width = canvas.width; sc.height = Math.ceil(srcH)
-        sc.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH)
-        if (!first) pdf.addPage()
-        pdf.addImage(sc.toDataURL('image/png'), 'PNG', 8, 8, imgW, sliceH)
-        remaining -= sliceH; first = false
+      const { default: jsPDF } = await import('jspdf' as any)
+      const autoTable = (await import('jspdf-autotable' as any)).default
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      // ── Roboto font (Unicode support for Slovak characters) ──────────────
+      try {
+        const fResp = await fetch(window.location.origin + '/api/fonts/roboto')
+        const fBuf = await fResp.arrayBuffer()
+        const fBytes = new Uint8Array(fBuf)
+        let fB64 = ''; const ch = 8192
+        for (let i = 0; i < fBytes.length; i += ch)
+          fB64 += String.fromCharCode(...Array.from(fBytes.subarray(i, Math.min(i+ch, fBytes.length))))
+        fB64 = btoa(fB64)
+        doc.addFileToVFS('Roboto-Regular.ttf', fB64)
+        doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
+        doc.setFont('Roboto', 'normal')
+      } catch (e) { console.warn('Roboto font load failed:', e) }
+      const M = 12; const PW = 210; const CW = PW - 2*M
+      let y = 18
+
+      // ── Logo + hlavička ──────────────────────────────────────────────────
+      if (logoUrl) {
+        try {
+          const absUrl = logoUrl.startsWith('http') ? logoUrl : window.location.origin + logoUrl
+          const resp = await fetch(absUrl)
+          const blob = await resp.blob()
+          const b64: string = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(blob) })
+          const imgEl = new window.Image()
+          await new Promise<void>(res => { imgEl.onload = () => res(); imgEl.src = b64 })
+          const maxW = 50, maxH = 14
+          const ratio = imgEl.naturalWidth / imgEl.naturalHeight
+          let logoW = maxW, logoH = logoW / ratio
+          if (logoH > maxH) { logoH = maxH; logoW = logoH * ratio }
+          doc.addImage(b64, 'PNG', M, y - 2, logoW, logoH)
+        } catch(_) {
+          doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(50,50,100)
+          doc.text('SYCOM', M, y+4)
+        }
+      } else {
+        doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(50,50,100)
+        doc.text('SYCOM', M, y+4)
       }
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(50,55,110)
+      doc.text('Výkaz prác a tovaru', PW-M, y+1, { align:'right' })
+      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(120,120,150)
+      doc.text('Obdobie: '+fmtDate(from)+' — '+fmtDate(to), PW-M, y+6, { align:'right' })
+      doc.text('Klient: '+clientLabel, PW-M, y+11, { align:'right' })
+      doc.setDrawColor(200,205,228); doc.setLineWidth(0.4); doc.line(M, y+16, PW-M, y+16)
+      y += 22
+
+      // ── Jeden súhrnný panel ───────────────────────────────────────────────
+      const types = Object.entries(summary.hoursByType) as [string,number][]
+      const totalH = sortedHours.reduce((s:number,r:any)=>s+r.hours, 0)
+      const panelH = 28
+      doc.setFillColor(245,246,252); doc.setDrawColor(210,213,235); doc.setLineWidth(0.4)
+      doc.roundedRect(M, y, CW, panelH, 2, 2, 'FD')
+
+      // Ľavá časť — celkové hodiny
+      const leftW = 38
+      doc.setFillColor(55,70,130); doc.roundedRect(M, y, leftW, panelH, 2, 2, 'F')
+      doc.rect(M+leftW-3, y, 3, panelH, 'F')
+      doc.setFontSize(16); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
+      doc.text(String(totalH)+' hod.', M+leftW/2, y+13, { align:'center' })
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(190,195,230)
+      doc.text('Hodiny spolu', M+leftW/2, y+20, { align:'center' })
+
+      // Stredná časť — typy hodín
+      const midStartX = M+leftW+3
+      const rightReserve = 52
+      const midW = CW - leftW - rightReserve - 3
+      const colW = types.length > 0 ? midW / types.length : midW
+      types.forEach(([type, hours]:[string,number], idx:number) => {
+        const tx = midStartX + idx * colW
+        if (idx > 0) { doc.setDrawColor(215,218,238); doc.setLineWidth(0.3); doc.line(tx, y+5, tx, y+panelH-5) }
+        doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(55,70,130)
+        doc.text(String(hours)+' hod.', tx+colW/2, y+12, { align:'center' })
+        doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,105,150)
+        const lbl = type.replace('Standard mimo prac. casu','Mimo PH: Std').replace('Server mimo prac. casu','Mimo PH: Srv')
+        doc.splitTextToSize(lbl, colW-4).slice(0,2).forEach((line:string, i:number) => {
+          doc.text(line, tx+colW/2, y+18+i*4, { align:'center' })
+        })
+      })
+
+      // Pravá časť — ceny
+      const priceX = M + CW - rightReserve + 2
+      doc.setDrawColor(215,218,238); doc.setLineWidth(0.3); doc.line(priceX-2, y+4, priceX-2, y+panelH-4)
+      doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(60,65,100)
+      doc.text('Práce:', priceX+2, y+9)
+      doc.setFont('helvetica','normal')
+      doc.text(fmt(summary.totalHoursPrice)+' €', M+CW-2, y+9, { align:'right' })
+      doc.setFont('helvetica','bold')
+      doc.text('Tovar:', priceX+2, y+15)
+      doc.setFont('helvetica','normal')
+      doc.text(fmt(summary.totalGoodsPrice)+' €', M+CW-2, y+15, { align:'right' })
+      doc.setDrawColor(210,213,235); doc.line(priceX+1, y+18, M+CW-2, y+18)
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(55,70,130)
+      doc.text('Celkom:', priceX+2, y+24)
+      doc.text(fmt(summary.totalPrice)+' €', M+CW-2, y+24, { align:'right' })
+      y += panelH + 8
+
+      // ── Tabuľka hodín ────────────────────────────────────────────────────
+      autoTable(doc, {
+        startY: y,
+        head: [['Dátum','Popis','Typ','Hod','J. Cena','Spolu','Technik']],
+        body: sortedHours.map((r:any) => [
+          fmtDate(r.date), r.name??'', r.hoursTypeLabel??'',
+          String(r.hours),
+          r.pricePerHour>0 ? fmt(r.pricePerHour)+' €' : '-',
+          r.totalPrice>0 ? fmt(r.totalPrice)+' €' : '-',
+          r.addedBy??'',
+        ]),
+        foot: !isAgent && sortedHours.length>0 ? [[
+          {content:'Spolu', colSpan:3, styles:{fontStyle:'bold'}},
+          {content:String(totalH)+' h', styles:{fontStyle:'bold'}},
+          '',
+          {content:fmt(summary.totalHoursPrice)+' €', styles:{fontStyle:'bold'}},
+          '',
+        ]] : undefined,
+        theme: 'striped',
+        headStyles: { fillColor:[60,75,140], textColor:255, fontSize:8, fontStyle:'bold', cellPadding:3 },
+        bodyStyles: { font:'Roboto', fontSize:7.5, cellPadding:{top:2.5,bottom:2.5,left:3,right:3}, overflow:'linebreak', textColor:[30,30,50] },
+        footStyles: { fillColor:[235,238,252], textColor:[30,30,50], fontStyle:'bold', fontSize:7.5 },
+        alternateRowStyles: { fillColor:[246,247,253] },
+        columnStyles: {
+          0:{cellWidth:22}, 1:{cellWidth:55,halign:'left',overflow:'linebreak'}, 2:{cellWidth:28},
+          3:{cellWidth:12,halign:'right'}, 4:{cellWidth:20,halign:'right'},
+          5:{cellWidth:23,halign:'right'}, 6:{cellWidth:20,halign:'left'},
+        },
+        margin:{left:M,right:M}, tableWidth:CW,
+        didDrawPage:(data:any) => {
+          if(data.pageNumber>1){
+            doc.setDrawColor(200,205,230); doc.setLineWidth(0.4); doc.line(M, 8, PW-M, 8)
+            doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(140,140,170)
+            doc.text('Výkaz | '+periodLabel+' | '+clientLabel, M, 6)
+          }
+        },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+
+      // ── Tabuľka tovaru ───────────────────────────────────────────────────
+      if (sortedGoods.length > 0) {
+        doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,40)
+        doc.text('Predaný tovar', M, y); y += 5
+        autoTable(doc, {
+          startY: y,
+          head: [['Dátum','Tovar','Množstvo','J. Cena','Spolu','DPH%','Technik']],
+          body: sortedGoods.map((r:any) => [
+            fmtDate(r.date), r.itemName??'', String(r.quantity)+' ks',
+            fmt(r.pricePerUnit)+' €', fmt(r.totalPrice)+' €',
+            String(r.vatRate)+'%', r.addedBy??'',
+          ]),
+          foot: !isAgent ? [[
+            {content:'Spolu',colSpan:4,styles:{fontStyle:'bold'}},
+            {content:fmt(summary.totalGoodsPrice)+' €',styles:{fontStyle:'bold'}},
+            '','',
+          ]] : undefined,
+          theme: 'striped',
+          headStyles: { fillColor:[37,99,235], textColor:255, fontSize:8, fontStyle:'bold', cellPadding:3 },
+          bodyStyles: { font:'Roboto', fontSize:7.5, cellPadding:{top:2.5,bottom:2.5,left:3,right:3}, overflow:'linebreak', textColor:[30,30,40] },
+          footStyles: { fillColor:[240,245,255], textColor:[30,30,40], fontStyle:'bold', fontSize:7.5 },
+          alternateRowStyles: { fillColor:[248,251,255] },
+          columnStyles: {
+            0:{cellWidth:22}, 1:{cellWidth:57}, 2:{cellWidth:20,halign:'right'},
+            3:{cellWidth:22,halign:'right'}, 4:{cellWidth:24,halign:'right'},
+            5:{cellWidth:14,halign:'center'}, 6:{cellWidth:0},
+          },
+          margin:{left:M,right:M}, tableWidth:CW,
+        })
+        y = (doc as any).lastAutoTable.finalY + 6
+      }
+
+      // ── Grand total ──────────────────────────────────────────────────────
+      if (role === 'ADMIN') {
+        doc.setFillColor(79,70,229)
+        doc.roundedRect(PW-M-72, y, 72, 11, 2, 2, 'F')
+        doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255)
+        doc.text('Celkom bez DPH: '+fmt(summary.totalPrice)+' €', PW-M-3, y+7, {align:'right'})
+      }
+
+      // ── Footer ───────────────────────────────────────────────────────────
+      doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(160,160,180)
+      doc.text('* Ceny sú uvedené bez DPH  |  Vygenerované: '+fmtDate(today), M, 291)
+
       const cn = selectedClient?.name?.replace(/\s+/g,'_') ?? 'vsetci'
-      pdf.save('vykaz_'+cn+'_'+from+'_'+to+'.pdf')
-    } catch { alert('PDF chyba. Skuste tlac.') }
+      doc.save('vykaz_'+cn+'_'+from+'_'+to+'.pdf')
+    } catch(e) { console.error(e); alert('PDF chyba. Skuste tlac.') }
     finally { setPdfLoading(false) }
   }
 
   async function handleAddManual() {
-    if (!mDate || !mName.trim() || !mType || !mHours) return
+    if (!mDate || !mName.trim() || !mType || !mHours || !mClientId) return
     setMSubmitting(true)
     try {
       const res = await fetch('/api/manual-hours', {
@@ -243,7 +412,7 @@ function VykazPage() {
             <p className="text-sm text-gray-500 mt-1">Odpracovane hodiny a predany tovar.</p>
           </div>
           <div className="no-print flex items-center gap-2">
-            <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors">
+            <button onClick={() => { setMClientId(clientId); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors">
               <Plus size={15}/> + Vykaz Prace
             </button>
             {summary && role === 'ADMIN' && (
@@ -259,7 +428,7 @@ function VykazPage() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Datum od</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Datum do</label><input type="date" value={to} onChange={e=>setTo(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div>
-            <div><label className="block text-xs font-medium text-gray-500 mb-1">Klient</label><select value={clientId} onChange={e=>setClientId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="">Vsetci klienti</option>{(clients??[]).map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div><label className="block text-xs font-medium text-gray-500 mb-1">Klient *</label><select value={clientId} onChange={e=>setClientId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="">Vsetci klienti</option>{(clients??[]).map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <button onClick={()=>refetch()} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 transition-colors"><FileText size={15}/> Generovat vykaz</button>
           </div>
         </div>
@@ -360,7 +529,7 @@ function VykazPage() {
         )}
       </div>
 
-      {showModal&&(<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Plus size={16} className="text-green-600"/> Zadat hodiny bez tiketu</h2><button onClick={()=>setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button></div><div className="p-6 space-y-4">{mStatus&&(<div className={'flex items-center gap-2 px-3 py-2 rounded-xl text-sm '+(mStatus.ok?'bg-green-50 border border-green-200 text-green-700':'bg-red-50 border border-red-200 text-red-700')}>{mStatus.ok?<Check size={14}/>:<X size={14}/>} {mStatus.msg}</div>)}<div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-500 mb-1">Datum *</label><input type="date" value={mDate} onChange={e=>setMDate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Pocet hodin *</label><input type="number" min="0.25" step="0.25" value={mHours} onChange={e=>setMHours(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Popis prace *</label><input type="text" value={mName} onChange={e=>setMName(e.target.value)} placeholder="Napr. Konfiguracia servera..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Typ hodin *</label><select value={mType} onChange={e=>setMType(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">{HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div>{role==='ADMIN'&&(<div><label className="block text-xs font-medium text-gray-500 mb-1">Technik</label><select value={mUserId} onChange={e=>setMUserId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="">Ã¢ÂÂ moje hodiny Ã¢ÂÂ</option>{(staffUsers??[]).map((u:any)=><option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}</select></div>)}<div><label className="block text-xs font-medium text-gray-500 mb-1">Klient</label><select value={mClientId} onChange={e=>setMClientId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="">Ã¢ÂÂ bez klienta Ã¢ÂÂ</option>{(clients??[]).map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div><div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onClick={()=>setShowModal(false)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button><button onClick={handleAddManual} disabled={mSubmitting||!mDate||!mName.trim()||!mHours} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"><Plus size={15}/> {mSubmitting?'Ukladam...':'Pridat hodiny'}</button></div></div></div>)}
+      {showModal&&(<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Plus size={16} className="text-green-600"/> Zadat hodiny bez tiketu</h2><button onClick={()=>setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button></div><div className="p-6 space-y-4">{mStatus&&(<div className={'flex items-center gap-2 px-3 py-2 rounded-xl text-sm '+(mStatus.ok?'bg-green-50 border border-green-200 text-green-700':'bg-red-50 border border-red-200 text-red-700')}>{mStatus.ok?<Check size={14}/>:<X size={14}/>} {mStatus.msg}</div>)}<div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-500 mb-1">Datum *</label><input type="date" value={mDate} onChange={e=>setMDate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Pocet hodin *</label><input type="number" min="0.25" step="0.25" value={mHours} onChange={e=>setMHours(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/><div className="flex gap-1 mt-1">{[0.5,1,1.5,2].map(v=><button key={v} type="button" onClick={()=>setMHours(String(v))} className="flex-1 py-1 text-xs border border-gray-200 rounded-lg hover:bg-sycom-50 hover:border-sycom-300 hover:text-sycom-700 transition-colors">{String(v).replace('.',',')}</button>)}</div></div></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Popis prace *</label><input type="text" value={mName} onChange={e=>setMName(e.target.value)} placeholder="Napr. Konfiguracia servera..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Typ hodin *</label><select value={mType} onChange={e=>setMType(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">{HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div>{role==='ADMIN'&&(<div><label className="block text-xs font-medium text-gray-500 mb-1">Technik</label><select value={mUserId} onChange={e=>setMUserId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="">— moje hodiny —</option>{(staffUsers??[]).filter((u:any)=>u.role==='ADMIN'||u.role==='AGENT').map((u:any)=><option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}</select></div>)}<div><label className="block text-xs font-medium text-gray-500 mb-1">Klient *</label><select value={mClientId} onChange={e=>setMClientId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white"><option value="" disabled>— vyber klienta —</option>{(clients??[]).map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div><div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onClick={()=>setShowModal(false)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button><button onClick={handleAddManual} disabled={mSubmitting||!mDate||!mName.trim()||!mHours||!mClientId} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"><Plus size={15}/> {mSubmitting?'Ukladam...':'Pridat hodiny'}</button></div></div></div>)}
       {editRow&&(<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Pencil size={16} className="text-sycom-500"/> Upravit hodiny</h2><button onClick={()=>setEditRow(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X size={16}/></button></div><div className="p-6 space-y-4">{eStatus&&(<div className={'flex items-center gap-2 px-3 py-2 rounded-xl text-sm '+(eStatus.ok?'bg-green-50 border border-green-200 text-green-700':'bg-red-50 border border-red-200 text-red-700')}>{eStatus.ok?<Check size={14}/>:<X size={14}/>} {eStatus.msg}</div>)}<div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-500 mb-1">Datum *</label><input type="date" value={eDate} onChange={e=>setEDate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Pocet hodin *</label><input type="number" min="0.25" step="0.25" value={eHours} onChange={e=>setEHours(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Popis prace *</label><input type="text" value={eName} onChange={e=>setEName(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400"/></div><div><label className="block text-xs font-medium text-gray-500 mb-1">Typ hodin *</label><select value={eType} onChange={e=>setEType(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sycom-400 bg-white">{HOURS_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div><p className="text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-xl">Hodiny z tiketov sa edituju priamo v tikete.</p></div><div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onClick={()=>setEditRow(null)} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50">Zrusit</button><button onClick={handleEditSave} disabled={eSubmitting||!eDate||!eName.trim()||!eHours} className="flex items-center gap-2 px-5 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"><Check size={15}/> {eSubmitting?'Ukladam...':'Ulozit zmeny'}</button></div></div></div>)}
     </PortalLayout>
   )

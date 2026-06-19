@@ -18,7 +18,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (ocr.stockStatus !== 'pending') return NextResponse.json({ error: 'Už spracované' }, { status: 400 })
 
   const userId = (session.user as any).id
-  const items  = ocr.items ? JSON.parse(ocr.items) : []
+  // Accept optional items override from request body
+  const body = await req.json().catch(() => ({}))
+  const itemsOverride = body.items  // array if user edited items, undefined otherwise
+  const items = itemsOverride ?? (ocr.items ? JSON.parse(ocr.items) : [])
+
+  // If items were overridden, save them back to the invoice
+  if (itemsOverride !== undefined) {
+    await prisma.invoiceOcrResult.update({
+      where: { id: params.id },
+      data: { items: items.length ? JSON.stringify(items) : null },
+    })
+  }
   const supplier = ocr.supplierName
     ? await prisma.supplier.findFirst({ where: { name: { equals: ocr.supplierName } } })
     : null

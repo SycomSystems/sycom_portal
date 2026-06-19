@@ -33,7 +33,7 @@ export default withAuth(
     const role = (token as any)?.role
 
     // Routes accessible by AGENT
-    const agentAllowed = ['/admin/sklad', '/admin/reports']
+    const agentAllowed = ['/admin/sklad', '/admin/reports', '/admin/kb']
     const isAgentAllowed = agentAllowed.some(p => pathname === p || pathname.startsWith(p + '/'))
 
     if (pathname.startsWith('/settings') && pathname !== '/settings/profile' && role !== 'ADMIN') {
