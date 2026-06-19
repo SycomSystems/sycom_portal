@@ -38,6 +38,7 @@ export default function TicketsPage() {
   const [limit,    setLimit]    = useState(20)
   const [sortBy,   setSortBy]   = useState('updatedAt')
   const [sortDir,  setSortDir]  = useState<'asc'|'desc'>('desc')
+  const [clientId, setClientId] = useState('')
   const { data: session } = useSession()
   const isAdmin = ['ADMIN', 'AGENT'].includes((session?.user as any)?.role)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -52,6 +53,7 @@ export default function TicketsPage() {
 
   const params = new URLSearchParams()
   if (search)                params.set('search', search)
+  if (clientId)              params.set('clientId', clientId)
   if (statuses.size > 0) params.set('status', Array.from(statuses).join(','))
   if (priority !== 'Všetky') params.set('priority', priority)
   params.set('page', String(page))
@@ -60,7 +62,7 @@ export default function TicketsPage() {
   params.set('sortDir', sortDir)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', search, Array.from(statuses).sort().join(','), priority, page, limit, sortBy, sortDir],
+    queryKey: ['tickets', search, Array.from(statuses).sort().join(','), priority, clientId, page, limit, sortBy, sortDir],
     queryFn:  () => fetch(`/api/tickets?${params}`).then(r => r.json()),
     placeholderData: (prev: any) => prev,
   })
@@ -72,6 +74,12 @@ export default function TicketsPage() {
     enabled: isAdmin,
   })
   const agents = (agentList ?? []).filter((u: any) => u.role === 'ADMIN' || u.role === 'AGENT')
+  const { data: clientList } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => fetch('/api/clients').then(r => r.json()),
+    enabled: isAdmin,
+  })
+  const clients = (clientList ?? []) as any[]
 
   const toggleSelect = (id: string) => setSelectedIds(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
@@ -150,6 +158,17 @@ export default function TicketsPage() {
               </button>
             ))}
           </div>
+          {isAdmin && clients.length > 0 && (
+            <div className="flex gap-2 items-center">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Klient:</span>
+              <select value={clientId} onChange={e => { setClientId(e.target.value); setPage(1) }}
+                className="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-white focus:outline-none focus:border-sycom-400 text-gray-600">
+                <option value="">— všetci klienti —</option>
+                {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {clientId && <button onClick={() => { setClientId(''); setPage(1) }} className="text-xs text-gray-400 hover:text-gray-600 underline">Zrušiť</button>}
+            </div>
+          )}
         </div>
 
         {/* Bulk action bar */}
@@ -221,7 +240,8 @@ export default function TicketsPage() {
                   </td>
                   <td className="px-3 py-3.5">
                     {t.client?.name ? (
-                      <span className="flex items-center gap-1 text-xs text-gray-600">
+                      <span onClick={e => { e.stopPropagation(); setClientId(t.client.id); setPage(1) }}
+                        className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer hover:text-sycom-600 hover:underline">
                         <Building2 size={12} className="text-gray-400 shrink-0" />{t.client.name}
                       </span>
                     ) : <span className="text-xs text-gray-300">—</span>}
@@ -273,7 +293,8 @@ export default function TicketsPage() {
                   </div>
                   <p className="text-sm font-semibold text-gray-800 truncate">{t.subject}</p>
                   {t.client?.name && (
-                    <p className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                    <p onClick={e => { e.preventDefault(); e.stopPropagation(); setClientId(t.client.id); setPage(1) }}
+                      className="flex items-center gap-1 text-xs text-gray-500 mt-1 cursor-pointer hover:text-sycom-600 hover:underline">
                       <Building2 size={11} className="text-gray-400" />{t.client.name}
                     </p>
                   )}

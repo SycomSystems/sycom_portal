@@ -66,6 +66,10 @@ export async function GET(req: NextRequest) {
     const searchOr = { OR: [{ subject: { contains: search } }, { description: { contains: search } }] }
     if (where.AND) { where.AND.push(searchOr) } else { where.AND = [searchOr] }
   }
+  const clientIdFilter = searchParams.get('clientId')
+  if (clientIdFilter && (role === 'ADMIN' || role === 'AGENT')) {
+    where.clientId = clientIdFilter
+  }
 
   const [tickets, total] = await Promise.all([
     prisma.ticket.findMany({
