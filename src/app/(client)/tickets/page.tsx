@@ -157,18 +157,19 @@ export default function TicketsPage() {
                 {priorityLabels[p] ?? p}
               </button>
             ))}
+            {isAdmin && clients.length > 0 && (
+              <>
+                <div className="flex-1" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1"><Filter size={10} /> Klient:</span>
+                <select value={clientId} onChange={e => { setClientId(e.target.value); setPage(1) }}
+                  className="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-white focus:outline-none focus:border-sycom-400 text-gray-600">
+                  <option value="">— všetci klienti —</option>
+                  {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {clientId && <button onClick={() => { setClientId(''); setPage(1) }} className="text-xs text-gray-400 hover:text-gray-600 underline">Zrušiť</button>}
+              </>
+            )}
           </div>
-          {isAdmin && clients.length > 0 && (
-            <div className="flex gap-2 items-center">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1 mr-1"><Filter size={10} /> Klient:</span>
-              <select value={clientId} onChange={e => { setClientId(e.target.value); setPage(1) }}
-                className="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-white focus:outline-none focus:border-sycom-400 text-gray-600">
-                <option value="">— všetci klienti —</option>
-                {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              {clientId && <button onClick={() => { setClientId(''); setPage(1) }} className="text-xs text-gray-400 hover:text-gray-600 underline">Zrušiť</button>}
-            </div>
-          )}
         </div>
 
         {/* Bulk action bar */}
