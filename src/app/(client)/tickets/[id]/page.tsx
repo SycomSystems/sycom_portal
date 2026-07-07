@@ -6,8 +6,9 @@ import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { formatDateTime, priorityLabels, statusLabels, categoryLabels, isSlaBreached, isSlaWarning } from '@/lib/utils'
-import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle, Trash2, Pencil, X, Save } from 'lucide-react'
+import { Send, Lock, AlertTriangle, User, Clock, ArrowLeft, Building2, Timer, CheckCircle, Trash2, Pencil, X, Save, Paperclip, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FILE_ACCEPT, validateFile, formatFileSize } from '@/lib/attachments'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH']
@@ -47,6 +48,8 @@ export default function TicketDetailPage() {
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
   const [isInternal, setIsInternal] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [deletingAttId, setDeletingAttId] = useState<string | null>(null)
   const [logHours, setLogHours] = useState('')
   const [logHoursType, setLogHoursType] = useState<HoursType>('STANDARD')
   const [logHoursErr, setLogHoursErr] = useState(false)
@@ -155,6 +158,44 @@ export default function TicketDetailPage() {
   function handleComment() {
     if (!comment.trim()) return
     mutation.mutate({ comment: comment.trim(), isInternal })
+  }
+
+  async function handleUploadFiles(list: FileList | null) {
+    if (!list || list.length === 0) return
+    const valid: File[] = []
+    for (const f of Array.from(list)) {
+      const check = validateFile(f.name, f.type, f.size)
+      if (!check.ok) { toast.error(`${f.name}: ${check.error}`); continue }
+      valid.push(f)
+    }
+    if (valid.length === 0) return
+    setUploadingFiles(true)
+    try {
+      const fd = new FormData()
+      valid.forEach(f => fd.append('files', f))
+      const res = await fetch(`/api/tickets/${id}/attachments`, { method: 'POST', body: fd })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error) }
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+      queryClient.refetchQueries({ queryKey: ['ticket', id] })
+      toast.success(valid.length > 1 ? 'Prílohy nahraté' : 'Príloha nahratá')
+    } catch (e: any) {
+      toast.error(e.message || 'Chyba pri nahrávaní prílohy')
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
+  async function handleDeleteAttachment(attId: string) {
+    if (!confirm('Naozaj odstrániť túto prílohu?')) return
+    setDeletingAttId(attId)
+    try {
+      const res = await fetch(`/api/tickets/${id}/attachments/${attId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+      queryClient.refetchQueries({ queryKey: ['ticket', id] })
+      toast.success('Príloha odstránená')
+    } catch { toast.error('Chyba pri odstraňovaní') }
+    finally { setDeletingAttId(null) }
   }
 
   function handleLogHours() {
@@ -387,6 +428,47 @@ export default function TicketDetailPage() {
           )}
         </div>
 
+        {/* ── Prílohy ──────────────────────────────────────────────── */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 mb-4 md:mb-5">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Paperclip size={13} /> Prílohy ({(ticket.attachments ?? []).length})
+            </p>
+            <label className={'flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors ' + (uploadingFiles ? 'bg-gray-100 text-gray-400' : 'bg-sycom-500 text-white hover:bg-sycom-600')}>
+              <Paperclip size={13} /> {uploadingFiles ? 'Nahrávam...' : 'Pridať prílohu'}
+              <input type="file" multiple accept={FILE_ACCEPT} disabled={uploadingFiles} className="hidden"
+                onChange={e => { handleUploadFiles(e.target.files); e.target.value = '' }} />
+            </label>
+          </div>
+          {(ticket.attachments ?? []).length === 0 ? (
+            <p className="text-xs text-gray-400 italic">Žiadne prílohy. Podporované: obrázky, PDF, Office, ZIP a pod. (max. 10 MB).</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {(ticket.attachments ?? []).map((a: any) => (
+                <li key={a.id} className="flex items-center justify-between gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" download
+                     className="flex items-center gap-2 min-w-0 text-sm text-gray-700 hover:text-sycom-600 transition-colors">
+                    <Paperclip size={13} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{a.filename}</span>
+                    {a.size ? <span className="text-xs text-gray-400 shrink-0">{formatFileSize(a.size)}</span> : null}
+                  </a>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" download
+                       className="p-1 text-gray-300 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors" title="Stiahnuť">
+                      <Download size={14} />
+                    </a>
+                    <button onClick={() => handleDeleteAttachment(a.id)} disabled={deletingAttId === a.id}
+                      className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50" title="Odstrániť">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {/* ── END Prílohy ──────────────────────────────────────────── */}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <div className="md:col-span-2 space-y-4">
             <h2 className="text-sm font-bold text-gray-700">Konverzacia ({(ticket.comments ?? []).length})</h2>
@@ -464,7 +546,12 @@ export default function TicketDetailPage() {
                   <Lock size={11} /> Interna poznamka
                 </label>
               )}
-              <div className="flex justify-end mt-3">
+              <div className="flex justify-between items-center mt-3">
+                <label className={'flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-colors ' + (uploadingFiles ? 'text-gray-300' : 'text-gray-400 hover:text-sycom-500')} title="Pripojiť súbor k tiketu">
+                  <Paperclip size={14} /> {uploadingFiles ? 'Nahrávam...' : 'Priložiť súbor'}
+                  <input type="file" multiple accept={FILE_ACCEPT} disabled={uploadingFiles} className="hidden"
+                    onChange={e => { handleUploadFiles(e.target.files); e.target.value = '' }} />
+                </label>
                 <button onClick={handleComment} disabled={mutation.isPending || !comment.trim()}
                   className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-xs font-bold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors">
                   <Send size={13} /> {mutation.isPending ? 'Odosielam...' : 'Odoslat'}

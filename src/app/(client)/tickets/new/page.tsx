@@ -8,7 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { PortalLayout } from '@/components/layout/PortalLayout'
-import { Loader2, Send, Building2 } from 'lucide-react'
+import { Loader2, Send, Building2, Paperclip, X } from 'lucide-react'
+import { FILE_ACCEPT, validateFile, formatFileSize } from '@/lib/attachments'
 
 const schema = z.object({
   subject:     z.string().min(5, 'Min. 5 znakov').max(200),
@@ -46,6 +47,7 @@ export default function NewTicketPage() {
   const isStaff             = role === 'ADMIN' || role === 'AGENT'
 
   const [loading,  setLoading]  = useState(false)
+  const [files, setFiles] = useState<File[]>([])
   const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
   const [slaDate, setSlaDate] = useState<string>('')
   const [clients,  setClients]  = useState<{ id: string; name: string }[]>([])
@@ -112,6 +114,30 @@ export default function NewTicketPage() {
     setSlaDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
   }, [selectedPriority])
 
+  function addFiles(list: FileList | null) {
+    if (!list) return
+    const incoming = Array.from(list)
+    const valid: File[] = []
+    for (const f of incoming) {
+      const check = validateFile(f.name, f.type, f.size)
+      if (!check.ok) { toast.error(`${f.name}: ${check.error}`); continue }
+      valid.push(f)
+    }
+    if (valid.length) setFiles(prev => [...prev, ...valid])
+  }
+
+  function removeFile(idx: number) {
+    setFiles(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  async function uploadAttachments(ticketId: string) {
+    if (files.length === 0) return
+    const fd = new FormData()
+    files.forEach(f => fd.append('files', f))
+    const res = await fetch(`/api/tickets/${ticketId}/attachments`, { method: 'POST', body: fd })
+    if (!res.ok) throw new Error('upload failed')
+  }
+
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
@@ -136,6 +162,11 @@ export default function NewTicketPage() {
         throw new Error(err.error || 'Chyba pri vytváraní tiketu')
       }
       const ticket = await res.json()
+      try {
+        await uploadAttachments(ticket.id)
+      } catch {
+        toast.error('Tiket vytvorený, ale prílohy sa nepodarilo nahrať')
+      }
       toast.success('Tiket bol vytvorený!')
       router.push(`/tickets/${ticket.id}`)
     } catch (e: any) {
@@ -176,6 +207,33 @@ export default function NewTicketPage() {
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-sycom-400 focus:ring-2 focus:ring-sycom-100"
             />
             {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description.message}</p>}
+          </div>
+
+          {/* Attachments */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prílohy</label>
+            <label className="flex items-center gap-2 w-fit cursor-pointer px-3 py-2 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-sycom-400 hover:text-sycom-500 transition-colors">
+              <Paperclip size={14} /> Pridať súbory
+              <input type="file" multiple accept={FILE_ACCEPT} className="hidden"
+                onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+            </label>
+            <p className="text-[11px] text-gray-400 mt-1.5">Obrázky, PDF, Office, ZIP a pod. — max. 10 MB na súbor.</p>
+            {files.length > 0 && (
+              <ul className="mt-3 space-y-1.5">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-xl px-3 py-2">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Paperclip size={13} className="text-gray-400 shrink-0" />
+                      <span className="truncate text-gray-700">{f.name}</span>
+                      <span className="text-xs text-gray-400 shrink-0">{formatFileSize(f.size)}</span>
+                    </span>
+                    <button type="button" onClick={() => removeFile(i)} className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0">
+                      <X size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Priority + Category */}
