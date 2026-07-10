@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isMonthLocked } from '@/lib/vykazLock'
+
+const LOCK_MSG = 'Vykaz pre tohto klienta za dany mesiac je uzamknuty. Odomkne ho administrator.'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -38,6 +41,7 @@ export async function POST(req: NextRequest) {
   const sessionUserId = (session.user as any).id
   const { date, name, hoursType, hours, userId, clientId } = await req.json()
   if (!date || !name || !hoursType || !hours) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (await isMonthLocked(clientId || null, new Date(date))) return NextResponse.json({ error: LOCK_MSG }, { status: 423 })
   const resolvedUserId = role === 'AGENT' ? sessionUserId : (userId || sessionUserId)
   const row = await prisma.manualHours.create({
     data: { date: new Date(date), name: name.trim(), hoursType, hours: parseFloat(hours), userId: resolvedUserId, clientId: clientId || null },
@@ -59,6 +63,12 @@ export async function PATCH(req: NextRequest) {
   const existing = await prisma.manualHours.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (patchRole === 'AGENT' && existing.userId !== patchUserId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // zámok: blokuj úpravu ak je zamknutý pôvodný mesiac/klient alebo cieľový (presun do zamknutého)
+  const targetDate = date ? new Date(date) : existing.date
+  const targetClientId = clientId !== undefined ? (clientId || null) : existing.clientId
+  if (await isMonthLocked(existing.clientId, existing.date) || await isMonthLocked(targetClientId, targetDate)) {
+    return NextResponse.json({ error: LOCK_MSG }, { status: 423 })
+  }
   const updated = await prisma.manualHours.update({
     where: { id },
     data: {
@@ -84,6 +94,7 @@ export async function DELETE(req: NextRequest) {
   const toDelete = await prisma.manualHours.findUnique({ where: { id } })
   if (!toDelete) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (role === 'AGENT' && toDelete.userId !== (session.user as any).id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (await isMonthLocked(toDelete.clientId, toDelete.date)) return NextResponse.json({ error: LOCK_MSG }, { status: 423 })
   await prisma.manualHours.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

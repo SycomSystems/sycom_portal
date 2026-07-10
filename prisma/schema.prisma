@@ -73,6 +73,7 @@ model Client {
   @@map("clients")
   emailAlias     String?         @unique
   technicians    ClientTechnician[]
+  vykazLocks     VykazLock[]
 }
 
 model ClientPricing {
@@ -203,6 +204,7 @@ model User {
   @@map("users")
   assignedClients      ClientTechnician[]
   auditLogs            AuditLog[]
+  vykazLocks           VykazLock[]       @relation("VykazLockedBy")
   stockUsagesCreated   TicketStockUsage[]
   expoPushToken String?
   coAssignedTickets TicketAssignee[]
@@ -616,4 +618,18 @@ model SupplierHint {
   updatedAt    DateTime @updatedAt
 
   @@map("supplier_hints")
+}
+
+model VykazLock {
+  id         String   @id @default(cuid())
+  clientId   String
+  year       Int
+  month      Int      // 1-12
+  lockedById String
+  lockedAt   DateTime @default(now())
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lockedBy   User     @relation("VykazLockedBy", fields: [lockedById], references: [id])
+
+  @@unique([clientId, year, month])
+  @@map("vykaz_locks")
 }

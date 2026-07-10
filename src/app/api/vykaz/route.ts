@@ -127,6 +127,7 @@ export async function GET(req: NextRequest) {
       addedBy: m.user.name,
       client: m.client,
       manualId: m.id,
+      userId: m.userId,
     }
   })
 

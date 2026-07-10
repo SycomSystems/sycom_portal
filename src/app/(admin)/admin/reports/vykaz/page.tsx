@@ -4,7 +4,8 @@ import { useSearchParams } from 'next/navigation'
 import { PortalLayout } from '@/components/layout/PortalLayout'
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download, Plus, X, Check, Ticket, Pencil, Trash2 } from 'lucide-react'
+import Link from 'next/link'
+import { Clock, Package, Euro, FileText, ChevronDown, ChevronUp, Printer, Download, Plus, X, Check, Ticket, Pencil, Trash2, Lock } from 'lucide-react'
 
 function fmt(n: number) { return n.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string | Date) { return new Date(d).toLocaleDateString('sk-SK') }
@@ -68,6 +69,18 @@ function VykazPage() {
   }, [])
 
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => fetch('/api/clients').then(r=>r.json()) })
+  const { data: locks } = useQuery({ queryKey: ['vykaz-locks'], queryFn: () => fetch('/api/vykaz/locks').then(r=>r.json()) })
+  const lockedSet = useMemo(() => {
+    const s = new Set<string>()
+    for (const l of (Array.isArray(locks) ? locks : [])) s.add(`${l.clientId}|${l.year}|${l.month}`)
+    return s
+  }, [locks])
+  function rowLocked(row: any) {
+    const cid = row?.client?.id
+    if (!cid) return false
+    const d = new Date(row.date)
+    return lockedSet.has(`${cid}|${d.getFullYear()}|${d.getMonth() + 1}`)
+  }
   const { data: staffUsers } = useQuery({
     queryKey: ['staff-users'],
     queryFn: () => fetch('/api/users?roles=ADMIN,AGENT').then(r=>r.json()),
@@ -365,7 +378,7 @@ function VykazPage() {
     if (!confirm('Naozaj vymazat tieto hodiny?')) return
     const res = await fetch('/api/manual-hours?id=' + row.manualId, { method: 'DELETE' })
     if (res.ok) refetch()
-    else alert('Chyba pri mazani.')
+    else { const d = await res.json().catch(()=>({})); alert(d.error || 'Chyba pri mazani.') }
   }
 
   const LogoEl = () => logoUrl ? (
@@ -423,6 +436,13 @@ function VykazPage() {
             )}
           </div>
         </div>
+
+        {role === 'ADMIN' && (
+          <div className="no-print flex items-center gap-1 mb-6 border-b border-gray-200">
+            <Link href="/admin/reports/vykaz" className="px-4 py-2.5 text-sm font-semibold text-sycom-600 border-b-2 border-sycom-500 -mb-px">Vykaz</Link>
+            <Link href="/admin/reports/zamky" className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-800 border-b-2 border-transparent -mb-px">Zamky mesiacov</Link>
+          </div>
+        )}
 
         <div className="no-print bg-white border border-gray-200 rounded-2xl p-5 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
@@ -496,7 +516,7 @@ function VykazPage() {
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs">{row.pricePerHour>0?fmt(row.pricePerHour)+' EUR':'-'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs font-semibold text-gray-800">{row.totalPrice>0?fmt(row.totalPrice)+' EUR':'-'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500">{row.addedBy}</td>
-                      {(role==='ADMIN'||role==='AGENT')&&(<td className="no-print px-3 py-2.5 whitespace-nowrap">{row.source==='manual'&&(role==='ADMIN'||row.userId===sessionUserId)?(<div className="flex items-center gap-1"><button onClick={()=>openEdit(row)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13}/></button><button onClick={()=>handleDelete(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13}/></button></div>):role==='ADMIN'&&row.source!=='manual'?<span className="text-[10px] text-gray-300">tiket</span>:null}</td>)}
+                      {(role==='ADMIN'||role==='AGENT')&&(<td className="no-print px-3 py-2.5 whitespace-nowrap">{row.source==='manual'&&(role==='ADMIN'||row.userId===sessionUserId)?(rowLocked(row)?<span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500" title="Vykaz je uzamknuty"><Lock size={11}/> zamknute</span>:(<div className="flex items-center gap-1"><button onClick={()=>openEdit(row)} className="p-1.5 text-gray-400 hover:text-sycom-500 hover:bg-sycom-50 rounded-lg transition-colors"><Pencil size={13}/></button><button onClick={()=>handleDelete(row)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13}/></button></div>)):role==='ADMIN'&&row.source!=='manual'?<span className="text-[10px] text-gray-300">tiket</span>:null}</td>)}
                     </tr>
                   ))}
                 </tbody>
