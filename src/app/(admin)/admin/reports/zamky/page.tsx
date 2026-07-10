@@ -25,6 +25,7 @@ export default function ZamkyPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [busy, setBusy] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => fetch('/api/clients').then(r => r.json()) })
   const { data: locks, refetch } = useQuery({
@@ -71,6 +72,29 @@ export default function ZamkyPage() {
     } finally { setBusy(null) }
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function toggleSelectAll() {
+    setSelected(prev => prev.size === sortedClients.length ? new Set() : new Set(sortedClients.map((c: any) => c.id)))
+  }
+  async function lockSelected() {
+    if (selected.size === 0) return
+    setBusy('*')
+    try {
+      await fetch('/api/vykaz/locks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientIds: Array.from(selected), year, month }) })
+      setSelected(new Set()); await refetch()
+    } finally { setBusy(null) }
+  }
+  async function unlockSelected() {
+    if (selected.size === 0) return
+    setBusy('*')
+    try {
+      await fetch(`/api/vykaz/locks?clientIds=${Array.from(selected).join(',')}&year=${year}&month=${month}`, { method: 'DELETE' })
+      setSelected(new Set()); await refetch()
+    } finally { setBusy(null) }
+  }
+
   if (role && role !== 'ADMIN') {
     return (
       <PortalLayout>
@@ -110,7 +134,10 @@ export default function ZamkyPage() {
             </select>
           </div>
           <div className="flex-1" />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={lockSelected} disabled={busy !== null || selected.size === 0} className="flex items-center gap-2 px-4 py-2 bg-sycom-500 text-white text-sm font-semibold rounded-xl hover:bg-sycom-600 disabled:opacity-50 transition-colors"><Lock size={14} /> Zamknut oznacene{selected.size > 0 ? ` (${selected.size})` : ''}</button>
+            <button onClick={unlockSelected} disabled={busy !== null || selected.size === 0} className="flex items-center gap-2 px-4 py-2 border border-sycom-200 text-sycom-600 text-sm font-semibold rounded-xl hover:bg-sycom-50 disabled:opacity-50 transition-colors"><Unlock size={14} /> Odomknut oznacene{selected.size > 0 ? ` (${selected.size})` : ''}</button>
+            <span className="w-px h-6 bg-gray-200 mx-1" />
             <button onClick={lockAll} disabled={busy !== null} className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white text-sm font-semibold rounded-xl hover:bg-gray-900 disabled:opacity-50 transition-colors"><Lock size={14} /> Zamknut vsetkych</button>
             <button onClick={unlockAll} disabled={busy !== null} className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"><Unlock size={14} /> Odomknut vsetkych</button>
           </div>
@@ -126,6 +153,13 @@ export default function ZamkyPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="w-10 px-4 py-3">
+                  <input type="checkbox" aria-label="Oznacit vsetkych"
+                    checked={sortedClients.length > 0 && selected.size === sortedClients.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < sortedClients.length }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-sycom-500 focus:ring-sycom-400 cursor-pointer" />
+                </th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Klient</th>
                 <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Stav</th>
                 <th className="text-right px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Akcia</th>
@@ -135,7 +169,12 @@ export default function ZamkyPage() {
               {sortedClients.map((c: any) => {
                 const isLocked = lockedSet.has(c.id)
                 return (
-                  <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                  <tr key={c.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50/50 ' + (selected.has(c.id) ? 'bg-sycom-50/40' : '')}>
+                    <td className="px-4 py-2.5">
+                      <input type="checkbox" aria-label={`Oznacit ${c.name}`}
+                        checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-sycom-500 focus:ring-sycom-400 cursor-pointer" />
+                    </td>
                     <td className="px-4 py-2.5 font-medium text-gray-800">{c.name}</td>
                     <td className="px-4 py-2.5">
                       {isLocked
@@ -153,7 +192,7 @@ export default function ZamkyPage() {
                 )
               })}
               {sortedClients.length === 0 && (
-                <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400 text-sm">Ziadni klienti</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">Ziadni klienti</td></tr>
               )}
             </tbody>
           </table>
